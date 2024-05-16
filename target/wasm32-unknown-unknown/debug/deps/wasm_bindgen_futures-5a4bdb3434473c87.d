@@ -1,0 +1,9 @@
+/home/lara/Documents/Projects/HoneyOS/kernel/target/wasm32-unknown-unknown/debug/deps/libwasm_bindgen_futures-5a4bdb3434473c87.rmeta: /home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/lib.rs /home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/queue.rs /home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/task/wait_async_polyfill.rs /home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/task/multithread.rs /home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/task/worker.js
+
+/home/lara/Documents/Projects/HoneyOS/kernel/target/wasm32-unknown-unknown/debug/deps/wasm_bindgen_futures-5a4bdb3434473c87.d: /home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/lib.rs /home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/queue.rs /home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/task/wait_async_polyfill.rs /home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/task/multithread.rs /home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/task/worker.js
+
+/home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/lib.rs:
+/home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/queue.rs:
+/home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/task/wait_async_polyfill.rs:
+/home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/task/multithread.rs:
+/home/lara/.cargo/registry/src/index.crates.io-6f17d22bba15001f/wasm-bindgen-futures-0.4.42/src/task/worker.js:

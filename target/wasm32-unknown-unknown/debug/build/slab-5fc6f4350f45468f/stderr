@@ -1,0 +1,14 @@
+warning: unstable feature specified for `-Ctarget-feature`: `atomics`
+  |
+  = note: this feature is not stably supported; its behavior can change in the future
+
+warning: unstable feature specified for `-Ctarget-feature`: `bulk-memory`
+  |
+  = note: this feature is not stably supported; its behavior can change in the future
+
+warning: unstable feature specified for `-Ctarget-feature`: `mutable-globals`
+  |
+  = note: this feature is not stably supported; its behavior can change in the future
+
+warning: 3 warnings emitted
+
