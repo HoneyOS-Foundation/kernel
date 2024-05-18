@@ -18,7 +18,14 @@ pub fn normalize_path(path: &str) -> String {
         .filter(|p| !p.is_empty())
         .collect::<Vec<_>>();
     let new_parts = new_parts.iter().map(|p| p.to_string()).collect::<Vec<_>>();
-    let mut new_parts = new_parts.join("/");
-    new_parts.insert(0, '/');
+    let new_parts = new_parts.join("/");
     new_parts
+}
+
+/// Split the final file/dir -name of the path
+pub fn split_name_path(path: &str) -> (String, String) {
+    let mut dir_parts = path.split("/").collect::<Vec<_>>();
+    let name_part = dir_parts.split_off(dir_parts.len() - 1);
+    let name_part = name_part.first().unwrap();
+    (dir_parts.join("/"), name_part.to_string())
 }
