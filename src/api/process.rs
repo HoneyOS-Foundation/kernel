@@ -95,7 +95,7 @@ pub fn register_process_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     builder.register(
         "hapi_process_alive",
         Closure::<dyn Fn(*const u8, u32) -> i32>::new(move |id, id_len| {
-            let mut memory = ctx_f.memory();
+            let memory = ctx_f.memory();
             let id = String::from_utf8_lossy(&memory.read(id as u32, id_len)).to_string();
             let Ok(id) = Uuid::from_str(&id) else {
                 return 0;

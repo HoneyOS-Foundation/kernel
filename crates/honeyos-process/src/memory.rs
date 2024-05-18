@@ -74,7 +74,7 @@ impl Memory {
     }
 
     /// Read from a certain block of memory
-    pub fn read(&mut self, ptr: u32, len: u32) -> Vec<u8> {
+    pub fn read(&self, ptr: u32, len: u32) -> Vec<u8> {
         let buffer = self.inner.buffer();
         let bytes = Uint8Array::new(&buffer);
         bytes.slice(ptr, ptr + len as u32).to_vec()

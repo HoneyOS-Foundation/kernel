@@ -3,6 +3,7 @@
 //! This is done by a callback that gets called everytime a process gets initialized.
 pub mod browser;
 pub mod display;
+pub mod fs;
 pub mod mem;
 pub mod network;
 pub mod process;

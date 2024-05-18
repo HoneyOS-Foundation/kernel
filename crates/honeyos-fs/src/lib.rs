@@ -1,16 +1,22 @@
-use std::sync::{Arc, Mutex, MutexGuard, Once};
+use std::{
+    fmt::Display,
+    str::FromStr,
+    sync::{Arc, Once, RwLock},
+};
 
+use error::Error;
 use fshandler::FsHandler;
 use hashbrown::HashMap;
 
 pub mod error;
-pub mod filetable;
+pub mod file;
 pub mod fshandler;
-pub mod localfs;
+pub mod fstable;
 pub mod ramfs;
 pub mod tests;
+pub mod util;
 
-static mut FS_MANAGER: Option<Arc<Mutex<FsManager>>> = None;
+static mut FS_MANAGER: Option<Arc<FsManager>> = None;
 
 /// The label for a mounted file system
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -23,9 +29,10 @@ pub enum FsLabel {
     U,V,W,X,Y,
     Z,
 }
+
 /// Filesystem managers
 pub struct FsManager {
-    handlers: HashMap<FsLabel, Box<dyn FsHandler>>,
+    handlers: Arc<RwLock<HashMap<FsLabel, Arc<RwLock<dyn FsHandler>>>>>,
 }
 
 impl FsManager {
@@ -33,67 +40,98 @@ impl FsManager {
     pub fn init_once() {
         static SET_HOOK: Once = Once::new();
         SET_HOOK.call_once(|| unsafe {
-            FS_MANAGER = Some(Arc::new(Mutex::new(FsManager {
-                handlers: HashMap::new(),
-            })))
+            FS_MANAGER = Some(Arc::new(FsManager {
+                handlers: Arc::new(RwLock::new(HashMap::new())),
+            }));
         });
     }
 
-    /// Get the static instance
-    pub fn get<'a>() -> Option<MutexGuard<'a, FsManager>> {
-        let fs = unsafe {
-            FS_MANAGER
-                .as_ref()
-                .expect("File system manager not handled")
-        };
-        fs.try_lock().ok()
-    }
-
-    /// Get the static instance.
-    /// Blocks until locked.
-    pub fn blocking_get<'a>() -> MutexGuard<'a, FsManager> {
-        let fs = unsafe {
-            FS_MANAGER
-                .as_ref()
-                .expect("File system manager not handled")
-        };
-        loop {
-            let Ok(fs) = fs.try_lock() else {
-                continue;
-            };
-            return fs;
-        }
+    /// Get the file system
+    pub fn get() -> Arc<FsManager> {
+        unsafe { FS_MANAGER.clone().unwrap() }
     }
 
     /// Register the file system
-    pub fn register_fs<T>(&mut self, fs: T)
+    pub fn register_fs<T>(&self, label: FsLabel, file_system: T) -> Result<(), Error>
     where
-        T: FsHandler,
+        T: FsHandler + 'static,
     {
+        let mut handlers = self
+            .handlers
+            .write()
+            .map_err(|_| Error::FsManagerPoisoned)?;
+
+        if handlers.contains_key(&label) {
+            return Err(Error::LabelInUse(label));
+        }
+        handlers.insert(label, Arc::new(RwLock::new(file_system)));
+        Ok(())
+    }
+
+    /// Get a file system
+    pub fn get_fs(&self, label: FsLabel) -> Result<Arc<RwLock<dyn FsHandler>>, Error> {
+        let handlers = self.handlers.read().map_err(|_| Error::FsManagerPoisoned)?;
+
+        let Some(handler) = handlers.get(&label).cloned() else {
+            return Err(Error::NoFsMounted(label));
+        };
+        Ok(handler)
     }
 }
 
-/// Convert a path to the smallest possible representation
-/// This is done by handling shortcuts like `..` and `.` in the path
-pub fn normalize_path(path: &str) -> String {
-    let parts = path.split('/').collect::<Vec<_>>();
-    let mut new_parts = Vec::new();
-    for part in parts.iter() {
-        if part == &"." {
-            continue;
-        } else if part == &".." {
-            new_parts.pop();
-        } else {
-            new_parts.push(part);
+impl FsLabel {
+    /// Extract the fs label from a path
+    pub fn extract_from_path(path: &str) -> Result<Self, Error> {
+        let (fs_label_str, _) = path.split_at(3);
+        if !path.contains(':') {
+            return Err(Error::NoFsLabel(path.to_owned()));
+        }
+
+        let fs_char = fs_label_str
+            .get(0..1)
+            .ok_or(Error::NoFsLabel(path.to_owned()))?;
+        fs_char.parse()
+    }
+}
+
+impl Display for FsLabel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self, f)
+    }
+}
+
+impl FromStr for FsLabel {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "a" => Ok(Self::A),
+            "b" => Ok(Self::B),
+            "c" => Ok(Self::C),
+            "d" => Ok(Self::D),
+            "e" => Ok(Self::E),
+            "f" => Ok(Self::F),
+            "g" => Ok(Self::G),
+            "h" => Ok(Self::H),
+            "i" => Ok(Self::I),
+            "j" => Ok(Self::J),
+            "k" => Ok(Self::K),
+            "l" => Ok(Self::L),
+            "m" => Ok(Self::M),
+            "n" => Ok(Self::N),
+            "o" => Ok(Self::O),
+            "p" => Ok(Self::P),
+            "q" => Ok(Self::Q),
+            "r" => Ok(Self::R),
+            "s" => Ok(Self::S),
+            "t" => Ok(Self::T),
+            "u" => Ok(Self::U),
+            "v" => Ok(Self::V),
+            "w" => Ok(Self::W),
+            "x" => Ok(Self::X),
+            "y" => Ok(Self::Y),
+            "z" => Ok(Self::Z),
+            _ => Err(Error::NotAFsLabel(s.to_owned())),
         }
     }
-    // Remove double slashes
-    let new_parts = new_parts
-        .iter()
-        .filter(|p| !p.is_empty())
-        .collect::<Vec<_>>();
-    let new_parts = new_parts.iter().map(|p| p.to_string()).collect::<Vec<_>>();
-    let mut new_parts = new_parts.join("/");
-    new_parts.insert(0, '/');
-    new_parts
 }

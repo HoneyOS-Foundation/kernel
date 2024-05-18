@@ -1,50 +1,15 @@
 #[cfg(test)]
 mod filetable_tests {
-    use uuid::Uuid;
-
-    use crate::filetable::{FileTable, PathResult, TableItem};
+    use crate::fstable::FsTable;
 
     #[test]
-    fn test_filetable() {
-        let mut file_table = FileTable::new();
-        let file_id = file_table.create("test.txt", TableItem::File).unwrap();
-        let dir_id = file_table.create("test", TableItem::Directory).unwrap();
-        let file_id2 = file_table
-            .create("test/test2.txt", TableItem::File)
-            .unwrap();
-        let dir_id2 = file_table
-            .create("test/test2", TableItem::Directory)
-            .unwrap();
+    fn file_creation() {
+        let mut table = FsTable::new();
 
-        assert_eq!(
-            file_table.get("test.txt", TableItem::File),
-            Some(PathResult::File(file_id))
-        );
-        assert_eq!(
-            file_table.get("test", TableItem::Directory),
-            Some(PathResult::Directory(dir_id))
-        );
-        assert_eq!(
-            file_table.get("test/test2.txt", TableItem::File),
-            Some(PathResult::File(file_id2))
-        );
-        assert_eq!(
-            file_table.get("test/test2", TableItem::Directory),
-            Some(PathResult::Directory(dir_id2))
-        );
-    }
+        let foo_dir_id = table.create_dir("foo").unwrap();
+        let bar_file_id = table.create_file("foo/bar").unwrap();
 
-    #[test]
-    fn fs_nesting_stress() {
-        let mut file_table = FileTable::new();
-        let mut dir_id = Uuid::nil();
-        for i in 0..1000 {
-            let dir_name = format!("dir{}", i);
-            dir_id = file_table.create(&dir_name, TableItem::Directory).unwrap();
-        }
-        assert_eq!(
-            file_table.get("dir999", TableItem::Directory),
-            Some(PathResult::Directory(dir_id))
-        );
+        assert_eq!(Ok(foo_dir_id), table.get_dir("foo"));
+        assert_eq!(Ok(bar_file_id), table.get_file("foo/bar"));
     }
 }
