@@ -65,7 +65,7 @@ impl FsHandler for RamFsHandler {
         self.table.get_file_from_path(path)
     }
 
-    fn get_dir(&self, path: &str) -> Result<Uuid, Error> {
+    fn get_directory(&self, path: &str) -> Result<Uuid, Error> {
         self.table.get_directory_from_path(path)
     }
 
@@ -152,7 +152,7 @@ impl FsHandler for RamFsHandler {
     }
 
     fn move_directory(&mut self, src: &str, dest: &str) -> Result<(), Error> {
-        let dir_id = self.get_dir(src)?;
+        let dir_id = self.get_directory(src)?;
 
         let (dir_path, name_part) = util::split_name_path(dest);
 
@@ -195,7 +195,7 @@ impl FsHandler for RamFsHandler {
     }
 
     fn copy_directory(&mut self, src: &str, dest: &str) -> Result<Uuid, Error> {
-        let src_dir_id = self.get_dir(src)?;
+        let src_dir_id = self.get_directory(src)?;
         let dest_dir_id = self.create_directory(dest)?;
 
         // Recursivly copy directory

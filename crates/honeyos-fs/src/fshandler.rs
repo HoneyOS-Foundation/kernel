@@ -7,7 +7,7 @@ pub trait FsHandler {
     /// Get a file at the path. Return it's id
     fn get_file(&self, path: &str) -> Result<Uuid, Error>;
     /// Get a directory at the path. Return it's id
-    fn get_dir(&self, path: &str) -> Result<Uuid, Error>;
+    fn get_directory(&self, path: &str) -> Result<Uuid, Error>;
 
     /// Create a file at the path. Return it's id.
     fn create_file(&mut self, path: &str) -> Result<Uuid, Error>;

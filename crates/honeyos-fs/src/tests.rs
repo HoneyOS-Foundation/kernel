@@ -121,8 +121,8 @@ mod ramfs_tests {
         let foo_id = fs.create_file("spam/eggs/foo.txt").unwrap();
         let bar_id = fs.create_file("bar.txt").unwrap();
 
-        assert_eq!(spam_id, fs.get_dir("spam").unwrap());
-        assert_eq!(eggs_id, fs.get_dir("spam/eggs").unwrap());
+        assert_eq!(spam_id, fs.get_directory("spam").unwrap());
+        assert_eq!(eggs_id, fs.get_directory("spam/eggs").unwrap());
         assert_eq!(foo_id, fs.get_file("spam/eggs/foo.txt").unwrap());
         assert_eq!(bar_id, fs.get_file("bar.txt").unwrap());
     }

@@ -268,6 +268,47 @@ pub fn register_fs_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
         .into_js_value(),
     );
 
+    // hapi_fs_file_size
+    // Return a file's length
+    // ### Returns
+    // - `0` On success
+    // - `-1` if the file does not exist or if the path is incorrect.
+    // - `-2` If the fs label does not correspond to an active fs
+    // ### Panics
+    // Panics if the filesystem is poisoned.
+    let ctx_f = ctx.clone();
+    builder.register(
+        "hapi_fs_file_size",
+        Closure::<dyn Fn(u8, *const u8) -> i32>::new(move |fs_label, file_id| {
+            let memory = ctx_f.memory();
+            let Some(file_id) = memory.read_str(file_id as u32) else {
+                return -1;
+            };
+            let Ok(file_id) = Uuid::parse_str(&file_id) else {
+                return -1;
+            };
+            let Ok(fs_label) = FsLabel::from_str(&(fs_label as char).to_string()) else {
+                return -2;
+            };
+
+            let fs_manager = FsManager::get();
+            let Ok(fs) = fs_manager.get_fs(fs_label) else {
+                return -2;
+            };
+            let fs_reader = fs.read().expect(&format!(
+                "The lock for file system {}:/ has been poisoned",
+                fs_label
+            ));
+
+            let Ok(size) = fs_reader.file_size(file_id) else {
+                return -1;
+            };
+
+            size as i32
+        })
+        .into_js_value(),
+    );
+
     // hapi_fs_file_write
     // Write a set amount of bytes to a file
     // ### Returns
