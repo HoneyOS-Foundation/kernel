@@ -41,6 +41,7 @@ pub fn register_fs_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
     // - `0` On success
     // - `1` If the directory doesn't exist
     // - `2` If a file with the name already exists
+    // - `3` If the path string is invalid
     // ### Panics
     // Panics if the filesystem is poisoned.
     let ctx_f = ctx.clone();
@@ -48,7 +49,9 @@ pub fn register_fs_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
         "hapi_fs_create_file",
         Closure::<dyn Fn(*const u8) -> i32>::new(move |path| {
             let memory = ctx_f.memory();
-            let path = memory.read_str(path as u32);
+            let Some(path) = &memory.read_str(path as u32) else {
+                return -2;
+            };
 
             let fs_manager = FsManager::get();
             let Ok(fs_label) = FsLabel::extract_from_path(&path) else {

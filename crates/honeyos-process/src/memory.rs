@@ -1,3 +1,5 @@
+use std::ffi::CString;
+
 use anyhow::anyhow;
 use wasm_bindgen::JsCast;
 use web_sys::js_sys::{Reflect, SharedArrayBuffer, Uint8Array, WebAssembly, JSON};
@@ -82,22 +84,29 @@ impl Memory {
 
     /// Read a string from memory.
     /// Takes a pointer and then keeps reading until it finds a null terminator
-    pub fn read_str(&self, ptr: u32) -> String {
-        let mut string = Vec::new();
+    pub fn read_str(&self, ptr: u32) -> Option<String> {
         let buffer = self.inner.buffer();
         let bytes = Uint8Array::new(&buffer);
+        let byte_length = bytes.byte_length();
 
-        let mut offset = 0;
-        loop {
-            let byte = bytes.slice(ptr + offset, ptr + offset).to_vec()[0];
-            offset += 1;
+        let mut string = Vec::new();
+
+        // Iterate from the pointer position until we hit a null terminator or exceed buffer length
+        for offset in 0..byte_length {
+            let current_ptr = ptr + offset;
+            if current_ptr >= byte_length {
+                break;
+            }
+
+            let byte = bytes.get_index(current_ptr);
             string.push(byte);
-            if byte as char == '\0' {
+            if byte == 0 {
                 break;
             }
         }
 
-        String::from_utf8_lossy(&string).to_string()
+        let cstring = CString::from_vec_with_nul(string).ok()?;
+        Some(cstring.to_string_lossy().to_string())
     }
 
     /// Write to a certain block of memory

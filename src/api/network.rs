@@ -33,14 +33,24 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
                 // Read params
                 let mut memory = ctx_f.memory();
                 let url = memory.read_str(url as u32);
+                let Some(url) = url else {
+                    return std::ptr::null();
+                };
+                log::info!("Read url: {}", url);
                 let Ok(method) = RequestMethod::try_from(method) else {
                     return std::ptr::null();
                 };
                 let headers = memory.read_str(headers as u32);
+                let Some(headers) = headers else {
+                    return std::ptr::null();
+                };
+                log::info!("Read headers: {}", headers);
 
                 // Setup request
-                let mut network_manager = NetworkingManager::blocking_get();
+                let mut network_manager = NetworkingManager::blocking_get_writer();
                 let id = network_manager.request(url, method, RequestMode::Cors, headers);
+
+                log::info!("Requested: {}", id);
 
                 // Write id to memory
                 let id = id.to_string();
@@ -79,13 +89,21 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
                 // Read params
                 let mut memory = ctx_f.memory();
                 let url = memory.read_str(url as u32);
+                let Some(url) = url else {
+                    return std::ptr::null();
+                };
                 let Ok(method) = RequestMethod::try_from(method) else {
                     return std::ptr::null();
                 };
                 let headers = memory.read_str(headers as u32);
+                let Some(headers) = headers else {
+                    return std::ptr::null();
+                };
+
+                log::info!("Requesting: {}", url);
 
                 // Setup request
-                let mut network_manager = NetworkingManager::blocking_get();
+                let mut network_manager = NetworkingManager::blocking_get_writer();
                 let id = network_manager.request(url, method, RequestMode::SameOrigin, headers);
 
                 // Write id to memory
@@ -116,11 +134,15 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
         Closure::<dyn Fn(*const u8) -> i32>::new(move |id| {
             let memory = ctx_f.memory();
             let id = memory.read_str(id as u32);
+            let Some(id) = id else {
+                return -1;
+            };
             let Ok(id) = Uuid::from_str(&id) else {
+                log::error!("Failed to get uuid from str: {}", id);
                 return -1;
             };
 
-            let networking_manager = NetworkingManager::blocking_get();
+            let networking_manager = NetworkingManager::blocking_get_reader();
             let Some(status) = networking_manager.status(id) else {
                 return -1;
             };
@@ -145,11 +167,14 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
         Closure::<dyn Fn(*const u8) -> i32>::new(move |id| {
             let memory = ctx_f.memory();
             let id = memory.read_str(id as u32);
+            let Some(id) = id else {
+                return -1;
+            };
             let Ok(id) = Uuid::from_str(&id) else {
                 return -1;
             };
 
-            let networking_manager = NetworkingManager::blocking_get();
+            let networking_manager = NetworkingManager::blocking_get_reader();
             let Some(length) = networking_manager.data_length(id) else {
                 return -1;
             };
@@ -172,11 +197,14 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
         Closure::<dyn Fn(*const u8) -> *const u8>::new(move |id| {
             let mut memory = ctx_f.memory();
             let id = memory.read_str(id as u32);
+            let Some(id) = id else {
+                return std::ptr::null();
+            };
             let Ok(id) = Uuid::from_str(&id) else {
                 return std::ptr::null();
             };
 
-            let networking_manager = NetworkingManager::blocking_get();
+            let networking_manager = NetworkingManager::blocking_get_reader();
             let Some(data) = networking_manager.data(id) else {
                 return std::ptr::null();
             };
@@ -200,11 +228,14 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
         Closure::<dyn Fn(*const u8)>::new(move |id| {
             let memory = ctx_f.memory();
             let id = memory.read_str(id as u32);
+            let Some(id) = id else {
+                return;
+            };
             let Ok(id) = Uuid::from_str(&id) else {
                 return;
             };
 
-            let mut networking_manager = NetworkingManager::blocking_get();
+            let mut networking_manager = NetworkingManager::blocking_get_writer();
             networking_manager.remove(id);
         })
         .into_js_value(),

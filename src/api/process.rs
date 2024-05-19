@@ -67,6 +67,9 @@ pub fn register_process_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
         Closure::<dyn Fn(*const u8) -> *const u8>::new(move |id| {
             let mut memory = ctx_f.memory();
             let id = memory.read_str(id as u32);
+            let Some(id) = id else {
+                return std::ptr::null();
+            };
             let Ok(id) = Uuid::from_str(&id) else {
                 return std::ptr::null();
             };
@@ -97,6 +100,9 @@ pub fn register_process_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
         Closure::<dyn Fn(*const u8) -> i32>::new(move |id| {
             let memory = ctx_f.memory();
             let id = memory.read_str(id as u32);
+            let Some(id) = id else {
+                return 0;
+            };
             let Ok(id) = Uuid::from_str(&id) else {
                 return 0;
             };

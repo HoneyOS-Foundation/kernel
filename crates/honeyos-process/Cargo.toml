@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+wasm_thread = { git = "https://github.com/adamgerhant/wasm_thread.git", rev = "b0ba16bfe310bab02f18be699926812d4489299a", features = [
+    "es_modules",
+] }
 anyhow = "1.0.82"
 arc-swap = "1.7.1"
 futures = "0.3.30"
@@ -14,9 +17,6 @@ tokio = { version = "1.37.0", features = ["rt", "sync"] }
 uuid = { version = "1.8.0", features = ["js", "v4"] }
 wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
-wasm_thread = { git = "https://github.com/adamgerhant/wasm_thread.git", features = [
-    "es_modules",
-] }
 wasmparser = "0.207.0"
 web-sys = { version = "0.3.69", features = [
     "console",

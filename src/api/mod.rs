@@ -44,6 +44,9 @@ fn register_js_console_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilde
         "hapi_js_console_log_info",
         Closure::<dyn Fn(*const u8)>::new(move |ptr| {
             let string = ctx_f.memory().read_str(ptr as u32);
+            let Some(string) = string else {
+                return;
+            };
             log::info!("PID: {} - {}", ctx_f.pid(), string);
         })
         .into_js_value(),
@@ -56,6 +59,9 @@ fn register_js_console_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilde
         "hapi_js_console_log_warn",
         Closure::<dyn Fn(*const u8)>::new(move |ptr| {
             let string = ctx_f.memory().read_str(ptr as u32);
+            let Some(string) = string else {
+                return;
+            };
             log::warn!("PID: {} - {}", ctx_f.pid(), string);
         })
         .into_js_value(),
@@ -68,6 +74,9 @@ fn register_js_console_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilde
         "hapi_js_console_log_error",
         Closure::<dyn Fn(*const u8)>::new(move |ptr| {
             let string = ctx_f.memory().read_str(ptr as u32);
+            let Some(string) = string else {
+                return;
+            };
             log::error!("PID: {} - {}", ctx_f.pid(), string);
         })
         .into_js_value(),
@@ -110,6 +119,9 @@ fn register_stdout_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
                 continue;
             };
             let string = ctx_f.memory().read_str(ptr as u32);
+            let Some(string) = string else {
+                return;
+            };
             stdout.push(StdoutMessage::String(string.clone()));
             break;
         })

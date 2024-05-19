@@ -12,7 +12,7 @@ use web_sys::js_sys::{Function, Reflect, WebAssembly, JSON};
 use crate::{
     api::{ApiBuilderFn, ApiModuleCtx},
     memory::Memory,
-    requirements::{self, WasmRequirements},
+    requirements::WasmRequirements,
     stdout::{ProcessStdOut, StdoutMessage},
 };
 
@@ -264,7 +264,7 @@ fn setup_emscripten_imports(imports_object: &JsValue) -> anyhow::Result<()> {
         &"fd_close".into(),
         &Function::new_no_args("{}").into(),
     )
-    .map_err(|e| anyhow::anyhow!("Failed to setup imports: {:?}", e))?;
+    .map_err(|e| anyhow::anyhow!("Failed     to setup imports: {:?}", e))?;
     Reflect::set(
         &wasi_snapshot_preview1,
         &"fd_write".into(),

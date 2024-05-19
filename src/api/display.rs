@@ -27,14 +27,17 @@ pub fn register_display_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     // ### Returns
     // - `0` on success
     // - `-1` if no display is registered
+    // - `-2` if the id is invalid
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_server_claim_main",
         Closure::<dyn Fn(*const u8) -> i32>::new(move |id| {
             let memory = ctx_f.memory();
-            let id = &memory.read_str(id as u32);
+            let Some(id) = &memory.read_str(id as u32) else {
+                return -2;
+            };
             let Ok(id) = Uuid::from_str(&id) else {
-                return -1;
+                return -2;
             };
 
             let mut display_server = DisplayServer::blocking_get();
@@ -55,7 +58,7 @@ pub fn register_display_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_push_stdout",
-        Closure::<dyn Fn() -> i32>::new(move || loop {
+        Closure::<dyn Fn() -> i32>::new(move || {
             let mut display_server = DisplayServer::blocking_get();
             let Some(display) = display_server.display_mut(ctx_f.pid()) else {
                 return -1;
@@ -80,17 +83,21 @@ pub fn register_display_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     // ### Returns
     // - `0` on success
     // - `-1` if no display is registered
+    // - `-2` if the string is invalid
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_set_text",
-        Closure::<dyn Fn(*const u8) -> i32>::new(move |ptr: *const u8| loop {
+        Closure::<dyn Fn(*const u8) -> i32>::new(move |ptr: *const u8| {
             let mut display_server = DisplayServer::blocking_get();
             let Some(display) = display_server.display_mut(ctx_f.pid()) else {
                 return -1;
             };
 
             let memory = ctx_f.memory();
-            let string = memory.read_str(ptr as u32);
+            let Some(string) = &memory.read_str(ptr as u32) else {
+                return -2;
+            };
+            log::info!("display text: {}", string);
             display.set_text(string);
             return 0;
         })
