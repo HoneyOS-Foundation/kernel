@@ -85,7 +85,147 @@ pub fn register_fs_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
     // ### Returns
     // - `0` On success
     // - `-1` if the file does not exist or if the path is incorrect.
-    // - `-2` If the file label does not correspond to an active fs
+    // - `-2` If the fs label does not correspond to an active fs
+    // ### Panics
+    // Panics if the filesystem is poisoned.
+    // ### Safety
+    // The destination buffer must be the size of a UUID (37 bytes),
+    // otherwise the remaining bytes will be written to unallocated memory and can cause UB.
+    let ctx_f = ctx.clone();
+    builder.register(
+        "hapi_fs_file_get",
+        Closure::<dyn Fn(*const u8, *mut u8) -> i32>::new(move |path, buffer| {
+            let mut memory = ctx_f.memory();
+            let Some(mut path) = memory.read_str(path as u32) else {
+                return -1;
+            };
+
+            let Ok(label) = FsLabel::extract_from_path(&path) else {
+                return -2;
+            };
+
+            let fs_manager = FsManager::get();
+            let Ok(fs) = fs_manager.get_fs(label) else {
+                return -2;
+            };
+
+            let fs_reader = fs.read().expect(&format!(
+                "The lock for file system {}:/ has been poisoned",
+                label
+            ));
+
+            // Remove the label from the path
+            let path = path.split_off(3);
+
+            let Ok(file_id) = fs_reader.get_file(&path) else {
+                return -1;
+            };
+
+            let file_id = CString::new(file_id.to_string()).unwrap();
+            memory.write(buffer as u32, file_id.as_bytes());
+            0
+        })
+        .into_js_value(),
+    );
+
+    // hapi_fs_directory_create
+    // Create a directory at the path.
+    // ### Returns
+    // - `0` On success
+    // - `-1` If the directory doesn't exist
+    // - `-2` If a directory with the name already exists
+    // - `-3` If the path string is invalid
+    // ### Panics
+    // Panics if the filesystem is poisoned.
+    let ctx_f = ctx.clone();
+    builder.register(
+        "hapi_fs_directory_create",
+        Closure::<dyn Fn(*const u8) -> i32>::new(move |path| {
+            let memory = ctx_f.memory();
+            let Some(mut path) = memory.read_str(path as u32) else {
+                return -2;
+            };
+
+            let fs_manager = FsManager::get();
+            let Ok(fs_label) = FsLabel::extract_from_path(&path) else {
+                log::error!("Failed to get fs label from path: {}", path);
+                return -1;
+            };
+            let Ok(fs_manager) = fs_manager.get_fs(fs_label) else {
+                log::info!("Failed to get fs: {}", fs_label);
+                return -1;
+            };
+            let Ok(mut fs_manager) = fs_manager.write() else {
+                panic!("The file system manager has been poisoned");
+            };
+
+            let path = path.split_off(3);
+
+            match fs_manager.create_directory(&path) {
+                Ok(_) => 0,
+                Err(e) => match e {
+                    honeyos_fs::error::Error::DirectoryAlreadyExists(_) => -2,
+                    _ => -1,
+                },
+            }
+        })
+        .into_js_value(),
+    );
+
+    // hapi_fs_directory_get
+    // Find a directory at disk and return it's id
+    // ### Returns
+    // - `0` On success
+    // - `-1` if the directory does not exist or if the path is incorrect.
+    // - `-2` If the fs label does not correspond to an active fs
+    // ### Panics
+    // Panics if the filesystem is poisoned.
+    // ### Safety
+    // The destination buffer must be the size of a UUID (37 bytes),
+    // otherwise the remaining bytes will be written to unallocated memory and can cause UB.
+    let ctx_f = ctx.clone();
+    builder.register(
+        "hapi_fs_directory_get",
+        Closure::<dyn Fn(*const u8, *mut u8) -> i32>::new(move |path, buffer| {
+            let mut memory = ctx_f.memory();
+            let Some(mut path) = memory.read_str(path as u32) else {
+                return -1;
+            };
+
+            let Ok(label) = FsLabel::extract_from_path(&path) else {
+                return -2;
+            };
+
+            let fs_manager = FsManager::get();
+            let Ok(fs) = fs_manager.get_fs(label) else {
+                return -2;
+            };
+
+            let fs_reader = fs.read().expect(&format!(
+                "The lock for file system {}:/ has been poisoned",
+                label
+            ));
+
+            // Remove the label from the path
+            let path = path.split_off(3);
+
+            let Ok(dir_id) = fs_reader.get_directory(&path) else {
+                return -1;
+            };
+
+            let dir_id = CString::new(dir_id.to_string()).unwrap();
+            memory.write(buffer as u32, dir_id.as_bytes());
+            0
+        })
+        .into_js_value(),
+    );
+
+    // hapi_fs_file_get
+    // Find a file at disk and return it's id
+    // ### Returns
+    // - `0` On success
+    // - `-1` if the file does not exist or if the path is incorrect.
+    // - `-2` If the fs label does not correspond to an active fs
     // ### Panics
     // Panics if the filesystem is poisoned.
     // ### Safety
@@ -133,7 +273,7 @@ pub fn register_fs_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
     // ### Returns
     // - `0` On success
     // - `-1` if the file does not exist or if the path is incorrect.
-    // - `-2` If the file label does not correspond to an active fs
+    // - `-2` If the fs label does not correspond to an active fs
     // - `-3` If there is not enough space
     // ### Panics
     // Panics if the filesystem is poisoned.
@@ -181,7 +321,7 @@ pub fn register_fs_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
     // ### Returns
     // - `0` On success
     // - `-1` if the file does not exist or if the path is incorrect.
-    // - `-2` If the file label does not correspond to an active fs
+    // - `-2` If the fs label does not correspond to an active fs
     // ### Panics
     // Panics if the filesystem is poisoned.
     // ### Safety

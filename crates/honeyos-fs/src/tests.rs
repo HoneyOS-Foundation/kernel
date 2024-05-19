@@ -115,8 +115,8 @@ mod ramfs_tests {
     #[test]
     fn create() {
         let mut fs = RamFsHandler::new();
-        let spam_id = fs.create_dir("spam").unwrap();
-        let eggs_id = fs.create_dir("spam/eggs").unwrap();
+        let spam_id = fs.create_directory("spam").unwrap();
+        let eggs_id = fs.create_directory("spam/eggs").unwrap();
 
         let foo_id = fs.create_file("spam/eggs/foo.txt").unwrap();
         let bar_id = fs.create_file("bar.txt").unwrap();
@@ -131,8 +131,8 @@ mod ramfs_tests {
     fn copy_file() {
         let mut fs = RamFsHandler::new();
 
-        fs.create_dir("spam/").unwrap();
-        fs.create_dir("foo/").unwrap();
+        fs.create_directory("spam/").unwrap();
+        fs.create_directory("foo/").unwrap();
 
         let test_string = String::from("Hello, world!");
 
@@ -151,8 +151,8 @@ mod ramfs_tests {
     fn move_file() {
         let mut fs = RamFsHandler::new();
 
-        fs.create_dir("spam/").unwrap();
-        fs.create_dir("foo/").unwrap();
+        fs.create_directory("spam/").unwrap();
+        fs.create_directory("foo/").unwrap();
 
         let test_string = String::from("Hello, world!");
 
@@ -171,8 +171,8 @@ mod ramfs_tests {
     fn copy_dir() {
         let mut fs = RamFsHandler::new();
 
-        fs.create_dir("spam/").unwrap();
-        fs.create_dir("spam/eggs").unwrap();
+        fs.create_directory("spam/").unwrap();
+        fs.create_directory("spam/eggs").unwrap();
         fs.create_file("spam/eggs/spameggs.txt").unwrap();
 
         fs.copy_directory("spam/", "foo/").unwrap();
@@ -185,8 +185,8 @@ mod ramfs_tests {
     fn move_dir() {
         let mut fs = RamFsHandler::new();
 
-        fs.create_dir("spam/").unwrap();
-        fs.create_dir("spam/eggs").unwrap();
+        fs.create_directory("spam/").unwrap();
+        fs.create_directory("spam/eggs").unwrap();
         fs.create_file("spam/eggs/spameggs.txt").unwrap();
 
         fs.move_directory("spam", "foo").unwrap();

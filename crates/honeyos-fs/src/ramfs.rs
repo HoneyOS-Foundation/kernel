@@ -52,7 +52,7 @@ impl RamFsHandler {
                 self.table.get_directory_path(dest_dir_id)?,
                 subdir.name
             );
-            let new_subdir_id = self.create_dir(&new_subdir_path)?;
+            let new_subdir_id = self.create_directory(&new_subdir_path)?;
             self.copy_directory_recursive(subdir_id, new_subdir_id)?;
         }
 
@@ -75,7 +75,7 @@ impl FsHandler for RamFsHandler {
         Ok(id)
     }
 
-    fn create_dir(&mut self, path: &str) -> Result<Uuid, Error> {
+    fn create_directory(&mut self, path: &str) -> Result<Uuid, Error> {
         self.table.create_dir(path)
     }
 
@@ -196,7 +196,7 @@ impl FsHandler for RamFsHandler {
 
     fn copy_directory(&mut self, src: &str, dest: &str) -> Result<Uuid, Error> {
         let src_dir_id = self.get_dir(src)?;
-        let dest_dir_id = self.create_dir(dest)?;
+        let dest_dir_id = self.create_directory(dest)?;
 
         // Recursivly copy directory
         self.copy_directory_recursive(src_dir_id, dest_dir_id)?;

@@ -12,7 +12,7 @@ pub trait FsHandler {
     /// Create a file at the path. Return it's id.
     fn create_file(&mut self, path: &str) -> Result<Uuid, Error>;
     /// Create a directory at the path. Return it's id.
-    fn create_dir(&mut self, path: &str) -> Result<Uuid, Error>;
+    fn create_directory(&mut self, path: &str) -> Result<Uuid, Error>;
 
     /// Move a file to path
     fn move_file(&mut self, src: &str, dest: &str) -> Result<(), Error>;
