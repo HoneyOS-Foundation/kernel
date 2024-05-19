@@ -80,6 +80,26 @@ impl Memory {
         bytes.slice(ptr, ptr + len as u32).to_vec()
     }
 
+    /// Read a string from memory.
+    /// Takes a pointer and then keeps reading until it finds a null terminator
+    pub fn read_str(&self, ptr: u32) -> String {
+        let mut string = Vec::new();
+        let buffer = self.inner.buffer();
+        let bytes = Uint8Array::new(&buffer);
+
+        let mut offset = 0;
+        loop {
+            let byte = bytes.slice(ptr + offset, ptr + offset).to_vec()[0];
+            offset += 1;
+            string.push(byte);
+            if byte as char == '\0' {
+                break;
+            }
+        }
+
+        String::from_utf8_lossy(&string).to_string()
+    }
+
     /// Write to a certain block of memory
     pub fn write(&mut self, ptr: u32, data: &[u8]) {
         let bytes = Uint8Array::new(&self.inner.buffer());

@@ -28,16 +28,15 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_network_request",
-        Closure::<dyn Fn(*const u8, u32, u32, *const u8, u32) -> *const u8>::new(
-            move |url, url_len, method, headers, headers_len| {
+        Closure::<dyn Fn(*const u8, u32, *const u8) -> *const u8>::new(
+            move |url, method, headers| {
                 // Read params
                 let mut memory = ctx_f.memory();
-                let url = String::from_utf8_lossy(&memory.read(url as u32, url_len)).to_string();
+                let url = memory.read_str(url as u32);
                 let Ok(method) = RequestMethod::try_from(method) else {
                     return std::ptr::null();
                 };
-                let headers =
-                    String::from_utf8_lossy(&memory.read(headers as u32, headers_len)).to_string();
+                let headers = memory.read_str(headers as u32);
 
                 // Setup request
                 let mut network_manager = NetworkingManager::blocking_get();
@@ -75,16 +74,15 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_network_request_local",
-        Closure::<dyn Fn(*const u8, u32, u32, *const u8, u32) -> *const u8>::new(
-            move |url, url_len, method, headers, headers_len| {
+        Closure::<dyn Fn(*const u8, u32, *const u8) -> *const u8>::new(
+            move |url, method, headers| {
                 // Read params
                 let mut memory = ctx_f.memory();
-                let url = String::from_utf8_lossy(&memory.read(url as u32, url_len)).to_string();
+                let url = memory.read_str(url as u32);
                 let Ok(method) = RequestMethod::try_from(method) else {
                     return std::ptr::null();
                 };
-                let headers =
-                    String::from_utf8_lossy(&memory.read(headers as u32, headers_len)).to_string();
+                let headers = memory.read_str(headers as u32);
 
                 // Setup request
                 let mut network_manager = NetworkingManager::blocking_get();
@@ -115,9 +113,9 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_network_request_status",
-        Closure::<dyn Fn(*const u8, u32) -> i32>::new(move |id, id_len| {
+        Closure::<dyn Fn(*const u8) -> i32>::new(move |id| {
             let memory = ctx_f.memory();
-            let id = String::from_utf8_lossy(&memory.read(id as u32, id_len)).to_string();
+            let id = memory.read_str(id as u32);
             let Ok(id) = Uuid::from_str(&id) else {
                 return -1;
             };
@@ -144,9 +142,9 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_network_request_data_length",
-        Closure::<dyn Fn(*const u8, u32) -> i32>::new(move |id, id_len| {
+        Closure::<dyn Fn(*const u8) -> i32>::new(move |id| {
             let memory = ctx_f.memory();
-            let id = String::from_utf8_lossy(&memory.read(id as u32, id_len)).to_string();
+            let id = memory.read_str(id as u32);
             let Ok(id) = Uuid::from_str(&id) else {
                 return -1;
             };
@@ -171,9 +169,9 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_network_request_data",
-        Closure::<dyn Fn(*const u8, u32) -> *const u8>::new(move |id, id_len| {
+        Closure::<dyn Fn(*const u8) -> *const u8>::new(move |id| {
             let mut memory = ctx_f.memory();
-            let id = String::from_utf8_lossy(&memory.read(id as u32, id_len)).to_string();
+            let id = memory.read_str(id as u32);
             let Ok(id) = Uuid::from_str(&id) else {
                 return std::ptr::null();
             };
@@ -199,9 +197,9 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_network_request_drop",
-        Closure::<dyn Fn(*const u8, u32)>::new(move |id, id_len| {
+        Closure::<dyn Fn(*const u8)>::new(move |id| {
             let memory = ctx_f.memory();
-            let id = String::from_utf8_lossy(&memory.read(id as u32, id_len)).to_string();
+            let id = memory.read_str(id as u32);
             let Ok(id) = Uuid::from_str(&id) else {
                 return;
             };

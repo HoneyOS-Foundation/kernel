@@ -125,14 +125,29 @@ impl FsHandler for RamFsHandler {
         let dest_dir = if dir_path.len() > 0 {
             Some(self.table.get_directory_from_path(&dir_path)?)
         } else {
+            // Rename the file
+            let file = self.table.file_mut(file_id)?;
+            file.name = name_part.to_string();
             None
         };
 
+        // Check the dest dir already contains a file with the new name
+        if self
+            .table
+            .files
+            .iter()
+            .any(|d| d.1.dir == dest_dir && d.1.name == name_part)
+        {
+            return Err(Error::FileAlreadyExists(name_part));
+        }
+
+        // Attempt to move the file, if it failed, change the name back
         self.table.move_file(file_id, dest_dir)?;
 
         // Rename the file
         let file = self.table.file_mut(file_id)?;
         file.name = name_part.to_string();
+
         Ok(())
     }
 
@@ -147,11 +162,22 @@ impl FsHandler for RamFsHandler {
             None
         };
 
+        // Check the dest dir already contains a dir with the new name
+        if self
+            .table
+            .directories
+            .iter()
+            .any(|d| d.1.parent == dest_dir && d.1.name == name_part)
+        {
+            return Err(Error::DirectoryAlreadyExists(name_part));
+        }
+
         self.table.move_directory(dir_id, dest_dir)?;
 
         // Rename the directory
         let directory = self.table.directory_mut(dir_id)?;
-        directory.name = name_part.to_string();
+        directory.name = name_part;
+
         Ok(())
     }
 

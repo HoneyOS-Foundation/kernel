@@ -30,9 +30,9 @@ pub fn register_display_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_server_claim_main",
-        Closure::<dyn Fn(*const u8, u32) -> i32>::new(move |id, id_len| {
+        Closure::<dyn Fn(*const u8) -> i32>::new(move |id| {
             let memory = ctx_f.memory();
-            let id = String::from_utf8_lossy(&memory.read(id as u32, id_len)).to_string();
+            let id = &memory.read_str(id as u32);
             let Ok(id) = Uuid::from_str(&id) else {
                 return -1;
             };
@@ -83,15 +83,14 @@ pub fn register_display_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_set_text",
-        Closure::<dyn Fn(*const u8, u32) -> i32>::new(move |ptr: *const u8, len: u32| loop {
+        Closure::<dyn Fn(*const u8) -> i32>::new(move |ptr: *const u8| loop {
             let mut display_server = DisplayServer::blocking_get();
             let Some(display) = display_server.display_mut(ctx_f.pid()) else {
                 return -1;
             };
 
             let memory = ctx_f.memory();
-            let buf = memory.read(ptr as u32, len);
-            let string = String::from_utf8_lossy(&buf).to_string();
+            let string = memory.read_str(ptr as u32);
             display.set_text(string);
             return 0;
         })

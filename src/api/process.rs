@@ -64,9 +64,9 @@ pub fn register_process_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_process_stdout",
-        Closure::<dyn Fn(*const u8, u32) -> *const u8>::new(move |id, id_len| {
+        Closure::<dyn Fn(*const u8) -> *const u8>::new(move |id| {
             let mut memory = ctx_f.memory();
-            let id = String::from_utf8_lossy(&memory.read(id as u32, id_len)).to_string();
+            let id = memory.read_str(id as u32);
             let Ok(id) = Uuid::from_str(&id) else {
                 return std::ptr::null();
             };
@@ -94,9 +94,9 @@ pub fn register_process_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_process_alive",
-        Closure::<dyn Fn(*const u8, u32) -> i32>::new(move |id, id_len| {
+        Closure::<dyn Fn(*const u8) -> i32>::new(move |id| {
             let memory = ctx_f.memory();
-            let id = String::from_utf8_lossy(&memory.read(id as u32, id_len)).to_string();
+            let id = memory.read_str(id as u32);
             let Ok(id) = Uuid::from_str(&id) else {
                 return 0;
             };

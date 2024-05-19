@@ -150,11 +150,11 @@ impl FsTable {
 
     /// Move a file to a different directory
     pub fn move_file(&mut self, file_id: Uuid, dir_id: Option<Uuid>) -> Result<(), Error> {
-        // Update the file
         let file = self
             .files
             .get_mut(&file_id)
             .ok_or(Error::NoSuchFileWithId(file_id))?;
+
         let org_dir_id = file.dir;
         file.dir = dir_id;
 

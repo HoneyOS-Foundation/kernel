@@ -42,9 +42,8 @@ fn register_js_console_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilde
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_js_console_log_info",
-        Closure::<dyn Fn(*const u8, u32)>::new(move |ptr, len| {
-            let string = ctx_f.memory().read(ptr as u32, len as u32);
-            let string = String::from_utf8_lossy(&string).to_string();
+        Closure::<dyn Fn(*const u8)>::new(move |ptr| {
+            let string = ctx_f.memory().read_str(ptr as u32);
             log::info!("PID: {} - {}", ctx_f.pid(), string);
         })
         .into_js_value(),
@@ -55,9 +54,8 @@ fn register_js_console_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilde
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_js_console_log_warn",
-        Closure::<dyn Fn(*const u8, u32)>::new(move |ptr, len| {
-            let string = ctx_f.memory().read(ptr as u32, len as u32);
-            let string = String::from_utf8_lossy(&string).to_string();
+        Closure::<dyn Fn(*const u8)>::new(move |ptr| {
+            let string = ctx_f.memory().read_str(ptr as u32);
             log::warn!("PID: {} - {}", ctx_f.pid(), string);
         })
         .into_js_value(),
@@ -68,9 +66,8 @@ fn register_js_console_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilde
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_js_console_log_error",
-        Closure::<dyn Fn(*const u8, u32)>::new(move |ptr, len| {
-            let string = ctx_f.memory().read(ptr as u32, len as u32);
-            let string = String::from_utf8_lossy(&string).to_string();
+        Closure::<dyn Fn(*const u8)>::new(move |ptr| {
+            let string = ctx_f.memory().read_str(ptr as u32);
             log::error!("PID: {} - {}", ctx_f.pid(), string);
         })
         .into_js_value(),
@@ -107,13 +104,12 @@ fn register_stdout_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_stdout_write",
-        Closure::<dyn Fn(*const u8, u32)>::new(move |ptr: *const u8, len: u32| loop {
+        Closure::<dyn Fn(*const u8)>::new(move |ptr: *const u8| loop {
             let stdout = ctx_f.stdout();
             let Ok(mut stdout) = stdout.lock() else {
                 continue;
             };
-            let string = ctx_f.memory().read(ptr as u32, len as u32);
-            let string = String::from_utf8_lossy(&string).to_string();
+            let string = ctx_f.memory().read_str(ptr as u32);
             stdout.push(StdoutMessage::String(string.clone()));
             break;
         })

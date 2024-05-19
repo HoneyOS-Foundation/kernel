@@ -19,6 +19,8 @@ pub enum Error {
     },
     IsFile(String),
     IsDirectory(String),
+    FileAlreadyExists(String),
+    DirectoryAlreadyExists(String),
     DirectoryOrphaned(Uuid),
     FileOrphaned(Uuid),
     IndexOutOfRange {
@@ -64,6 +66,16 @@ impl std::fmt::Display for Error {
             Self::IsDirectory(s) => writeln!(f, "{} is a directory", s),
             Self::FileOrphaned(s) => writeln!(f, "File {} is orphaned", s),
             Self::DirectoryOrphaned(s) => writeln!(f, "Directory: {} is orphaned", s),
+            Self::FileAlreadyExists(file) => {
+                writeln!(f, "File \"{}\" already exists in specified path", file)
+            }
+            Self::DirectoryAlreadyExists(directory) => {
+                writeln!(
+                    f,
+                    "Directory \"{}\" already exists in specified path",
+                    directory
+                )
+            }
             Self::IndexOutOfRange { file, size, index } => writeln!(
                 f,
                 "Index {} is higher than {} bytes size of file {}",
