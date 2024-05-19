@@ -1,7 +1,7 @@
 pub mod error;
 pub mod request;
 
-use std::sync::{Arc, Mutex, MutexGuard, Once, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, Once, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use crate::error::Error;
 use hashbrown::HashMap;

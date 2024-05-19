@@ -44,8 +44,6 @@ fn execution_loop(_time_stamp: f64) -> anyhow::Result<()> {
         display_server.render();
     }
 
-    log::info!("Looping: {}", _time_stamp);
-
     window
         .request_animation_frame(
             &Closure::once_into_js(|t| execution_loop(t).unwrap())

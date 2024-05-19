@@ -36,7 +36,6 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
                 let Some(url) = url else {
                     return std::ptr::null();
                 };
-                log::info!("Read url: {}", url);
                 let Ok(method) = RequestMethod::try_from(method) else {
                     return std::ptr::null();
                 };
@@ -44,13 +43,10 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
                 let Some(headers) = headers else {
                     return std::ptr::null();
                 };
-                log::info!("Read headers: {}", headers);
 
                 // Setup request
                 let mut network_manager = NetworkingManager::blocking_get_writer();
                 let id = network_manager.request(url, method, RequestMode::Cors, headers);
-
-                log::info!("Requested: {}", id);
 
                 // Write id to memory
                 let id = id.to_string();
@@ -100,8 +96,6 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
                     return std::ptr::null();
                 };
 
-                log::info!("Requesting: {}", url);
-
                 // Setup request
                 let mut network_manager = NetworkingManager::blocking_get_writer();
                 let id = network_manager.request(url, method, RequestMode::SameOrigin, headers);
@@ -138,7 +132,6 @@ pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
                 return -1;
             };
             let Ok(id) = Uuid::from_str(&id) else {
-                log::error!("Failed to get uuid from str: {}", id);
                 return -1;
             };
 

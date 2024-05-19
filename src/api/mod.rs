@@ -18,8 +18,9 @@ use honeyos_process::{
 use wasm_bindgen::closure::Closure;
 
 use self::{
-    browser::register_browser_api, display::register_display_api, mem::register_mem_api,
-    network::register_network_api, process::register_process_api, time::register_time_api,
+    browser::register_browser_api, display::register_display_api, fs::register_fs_api,
+    mem::register_mem_api, network::register_network_api, process::register_process_api,
+    time::register_time_api,
 };
 
 /// Register the api.
@@ -33,6 +34,7 @@ pub fn register_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
     register_browser_api(ctx.clone(), builder);
     register_mem_api(ctx.clone(), builder);
     register_network_api(ctx.clone(), builder);
+    register_fs_api(ctx.clone(), builder);
 }
 
 /// Register the js-console api

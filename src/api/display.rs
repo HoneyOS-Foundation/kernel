@@ -97,7 +97,6 @@ pub fn register_display_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
             let Some(string) = &memory.read_str(ptr as u32) else {
                 return -2;
             };
-            log::info!("display text: {}", string);
             display.set_text(string);
             return 0;
         })
