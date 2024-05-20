@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+honeyos-fs = { path = "../honeyos-fs" }
+
 wasm_thread = { git = "https://github.com/adamgerhant/wasm_thread.git", rev = "b0ba16bfe310bab02f18be699926812d4489299a", features = [
     "es_modules",
 ] }

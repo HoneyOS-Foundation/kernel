@@ -65,15 +65,22 @@ impl ProcessManager {
     }
 
     /// Spawn a process
-    pub fn spawn(&mut self, wasm_bin: Vec<u8>, title: Option<String>) -> Uuid {
+    pub fn spawn(
+        &mut self,
+        wasm_bin: Vec<u8>,
+        title: Option<&str>,
+        working_directory: &str,
+    ) -> Uuid {
         let id = Uuid::new_v4();
         let title = if let Some(title) = title {
-            title
+            title.to_string()
         } else {
             id.to_string()
         };
-        self.processes
-            .insert(id, Process::new(id, wasm_bin, title, self.api_builder));
+        self.processes.insert(
+            id,
+            Process::new(id, wasm_bin, &title, working_directory, self.api_builder),
+        );
         id
     }
 

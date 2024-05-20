@@ -28,6 +28,47 @@ pub fn register_process_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
         .into_js_value(),
     );
 
+    // hapi_process_get_cwd
+    // Get the current working directory
+    let ctx_f = ctx.clone();
+    builder.register(
+        "hapi_process_get_cwd",
+        Closure::<dyn Fn() -> *const u8>::new(move || {
+            let cwd = ctx_f.cwd().clone();
+            let mut memory = ctx_f.memory();
+            let Some(ptr) = memory.alloc(cwd.len() as u32) else {
+                return std::ptr::null();
+            };
+
+            let cstring = CString::new(cwd).unwrap();
+            memory.write(ptr, &cstring.as_bytes());
+            ptr as *const u8
+        })
+        .into_js_value(),
+    );
+
+    // hapi_process_set_cwd
+    // Sets the current working directory for the process.
+    // ### Note
+    // There are no checks to see if the working directory is valid
+    // ### Returns
+    // - `0` On success
+    // - `-1` If the path is invalid
+    let ctx_f = ctx.clone();
+    builder.register(
+        "hapi_process_set_cwd",
+        Closure::<dyn Fn(*const u8) -> i32>::new(move |dir| {
+            let memory = ctx_f.memory();
+            let Some(path) = memory.read_str(dir as u32) else {
+                return -1;
+            };
+
+            ctx_f.set_cwd(&path);
+            0
+        })
+        .into_js_value(),
+    );
+
     // hapi_process_spawn_subprocess
     // Spawn a wasm binary as a subprocess.
     // ### Returns
@@ -41,7 +82,8 @@ pub fn register_process_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuild
             let wasm_bin = memory.read(bin as u32, bin_len);
 
             let mut process_manager = ProcessManager::blocking_get();
-            let pid = process_manager.spawn(wasm_bin, None);
+            let cwd = ctx_f.cwd();
+            let pid = process_manager.spawn(wasm_bin, None, &cwd);
 
             // Return the process id
             let pid = pid.to_string();

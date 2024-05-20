@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
 use hashbrown::HashMap;
 use uuid::Uuid;
@@ -16,6 +16,7 @@ pub struct ApiModuleCtx {
     stdout: Arc<Mutex<Vec<StdoutMessage>>>,
     memory: Arc<Mutex<Memory>>,
     table: Arc<WebAssembly::Table>,
+    cwd: Arc<RwLock<String>>,
 }
 
 impl ApiModuleCtx {
@@ -24,12 +25,14 @@ impl ApiModuleCtx {
         memory: Arc<Mutex<Memory>>,
         table: Arc<WebAssembly::Table>,
         stdout: Arc<Mutex<Vec<StdoutMessage>>>,
+        cwd: Arc<RwLock<String>>,
     ) -> Self {
         Self {
             pid,
             memory,
             table,
             stdout,
+            cwd,
         }
     }
 
@@ -63,6 +66,23 @@ impl ApiModuleCtx {
     /// Get the stdout messenger of the wasm module
     pub fn stdout(&self) -> Arc<Mutex<Vec<StdoutMessage>>> {
         self.stdout.clone()
+    }
+
+    /// Get the working directory
+    pub fn cwd(&self) -> String {
+        self.cwd.read().unwrap().clone()
+    }
+
+    /// Set the working directory
+    pub fn set_cwd(&self, wd: &str) {
+        let wd = honeyos_fs::util::normalize_path(wd);
+        loop {
+            let Ok(mut writer) = self.cwd.try_write() else {
+                continue;
+            };
+            *writer = wd.clone();
+            return;
+        }
     }
 }
 

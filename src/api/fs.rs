@@ -55,10 +55,20 @@ pub fn register_fs_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
             };
 
             let fs_manager = FsManager::get();
-            let Ok(fs_label) = FsLabel::extract_from_path(&path) else {
-                log::error!("Failed to get fs label from path: {}", path);
-                return -1;
+
+            // If the path does not contain a fs label, append the dir to the current working directory
+            let fs_label = match FsLabel::extract_from_path(&path) {
+                Ok(label) => label,
+                Err(_) => {
+                    let cwd = ctx_f.cwd();
+                    path = format!("{}/{}", cwd, path);
+                    let Ok(label) = FsLabel::extract_from_path(&path) else {
+                        return -2;
+                    };
+                    label
+                }
             };
+
             let Ok(fs_manager) = fs_manager.get_fs(fs_label) else {
                 log::info!("Failed to get fs: {}", fs_label);
                 return -1;
@@ -100,8 +110,19 @@ pub fn register_fs_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
                 return -1;
             };
 
-            let Ok(label) = FsLabel::extract_from_path(&path) else {
-                return -2;
+            // If the path does not contain a fs label, append the dir to the current working directory
+            let label = match FsLabel::extract_from_path(&path) {
+                Ok(label) => label,
+                Err(_) => {
+                    let cwd = ctx_f.cwd();
+                    path = format!("{}/{}", cwd, path);
+                    log::info!("{}", path);
+
+                    let Ok(label) = FsLabel::extract_from_path(&path) else {
+                        return -2;
+                    };
+                    label
+                }
             };
 
             let fs_manager = FsManager::get();
@@ -147,10 +168,20 @@ pub fn register_fs_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
             };
 
             let fs_manager = FsManager::get();
-            let Ok(fs_label) = FsLabel::extract_from_path(&path) else {
-                log::error!("Failed to get fs label from path: {}", path);
-                return -1;
+
+            // If the path does not contain a fs label, append the dir to the current working directory
+            let fs_label = match FsLabel::extract_from_path(&path) {
+                Ok(label) => label,
+                Err(_) => {
+                    let cwd = ctx_f.cwd();
+                    path = format!("{}/{}", cwd, path);
+                    let Ok(label) = FsLabel::extract_from_path(&path) else {
+                        return -2;
+                    };
+                    label
+                }
             };
+
             let Ok(fs_manager) = fs_manager.get_fs(fs_label) else {
                 log::info!("Failed to get fs: {}", fs_label);
                 return -1;
@@ -192,8 +223,17 @@ pub fn register_fs_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
                 return -1;
             };
 
-            let Ok(label) = FsLabel::extract_from_path(&path) else {
-                return -2;
+            // If the path does not contain a fs label, append the dir to the current working directory
+            let label = match FsLabel::extract_from_path(&path) {
+                Ok(label) => label,
+                Err(_) => {
+                    let cwd = ctx_f.cwd();
+                    path = format!("{}/{}", cwd, path);
+                    let Ok(label) = FsLabel::extract_from_path(&path) else {
+                        return -2;
+                    };
+                    label
+                }
             };
 
             let fs_manager = FsManager::get();
@@ -240,8 +280,17 @@ pub fn register_fs_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
                 return -1;
             };
 
-            let Ok(label) = FsLabel::extract_from_path(&path) else {
-                return -2;
+            // If the path does not contain a fs label, append the dir to the current working directory
+            let label = match FsLabel::extract_from_path(&path) {
+                Ok(label) => label,
+                Err(_) => {
+                    let cwd = ctx_f.cwd();
+                    path = format!("{}/{}", cwd, path);
+                    let Ok(label) = FsLabel::extract_from_path(&path) else {
+                        return -2;
+                    };
+                    label
+                }
             };
 
             let fs_manager = FsManager::get();

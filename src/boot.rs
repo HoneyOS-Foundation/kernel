@@ -64,7 +64,7 @@ fn read_and_execute(blob: Blob) -> anyhow::Result<()> {
 
         // Summon the boot process
         let mut process_manager = ProcessManager::blocking_get();
-        process_manager.spawn(buffer, Some("BOOT".into()));
+        process_manager.spawn(buffer, Some("BOOT".into()), "");
     }) as Box<dyn FnMut(_)>);
 
     file_reader.set_onload(Some(onload.as_ref().unchecked_ref()));

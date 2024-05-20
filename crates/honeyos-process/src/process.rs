@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
+    Arc, Mutex, RwLock,
 };
 use uuid::Uuid;
 use wasm_bindgen::{JsCast, JsValue};
@@ -23,6 +23,8 @@ pub struct Process {
     id: Uuid,
     // The process title
     title: String,
+    // The current working directory for the process
+    cwd: Arc<RwLock<String>>,
 
     // The thread handle
     _handle: JoinHandle<()>,
@@ -36,7 +38,13 @@ pub struct Process {
 
 impl Process {
     /// Create a process
-    pub fn new(id: Uuid, wasm_bin: Vec<u8>, title: String, api_builder: ApiBuilderFn) -> Self {
+    pub fn new(
+        id: Uuid,
+        wasm_bin: Vec<u8>,
+        title: &str,
+        working_directory: &str,
+        api_builder: ApiBuilderFn,
+    ) -> Self {
         // The running flag
         let running = Arc::new(AtomicBool::new(true));
         let running_thread = running.clone(); // The reference to the running flag sent to the process thread
@@ -45,6 +53,10 @@ impl Process {
         let stdout = ProcessStdOut::new();
         let stdout_thread = stdout.process_buffer();
 
+        // The current working directory
+        let cwd = Arc::new(RwLock::new(working_directory.to_string()));
+        let cwd_thread = cwd.clone();
+
         // The execution thread
         let handle = wasm_thread::spawn_async(async move || {
             // Youd think there was a cleaner way to do this. But the borrow checker will not sit still unless I do this.
@@ -52,8 +64,9 @@ impl Process {
             let wasm_bin = wasm_bin.clone();
             let running = running_thread.clone();
             let stdout = stdout_thread.clone();
+            let cwd = cwd_thread.clone();
             if let Err(e) =
-                thread_executor(id, wasm_bin, running.clone(), stdout, api_builder).await
+                thread_executor(id, wasm_bin, running.clone(), stdout, cwd, api_builder).await
             {
                 log::error!("Failed to execute process {}: {}", id, e);
                 running.store(false, Ordering::Relaxed);
@@ -62,9 +75,10 @@ impl Process {
 
         Self {
             id,
-            title,
+            title: title.to_string(),
             running,
             stdout,
+            cwd,
             _handle: handle,
         }
     }
@@ -93,6 +107,11 @@ impl Process {
     pub fn stdout_mut(&mut self) -> &mut ProcessStdOut {
         &mut self.stdout
     }
+
+    /// Get the current working directory
+    pub fn cwd(&self) -> String {
+        self.cwd.read().unwrap().clone()
+    }
 }
 
 /// The thread executor
@@ -101,6 +120,7 @@ async fn thread_executor(
     wasm_bin: Vec<u8>,
     running: Arc<AtomicBool>,
     stdout: Arc<Mutex<Vec<StdoutMessage>>>,
+    cwd: Arc<RwLock<String>>,
     api_builder: ApiBuilderFn,
 ) -> anyhow::Result<()> {
     let requirements = WasmRequirements::parse(&wasm_bin)?;
@@ -117,6 +137,7 @@ async fn thread_executor(
         memory.clone(),
         table.clone(),
         stdout.clone(),
+        cwd,
     ));
     let api_module = ApiModuleCtx::js_from_fn(api_builder, api_ctx);
 
