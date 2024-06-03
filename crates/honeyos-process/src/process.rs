@@ -1,23 +1,22 @@
 use anyhow::anyhow;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex, RwLock,
+    Arc, Mutex, MutexGuard, RwLock,
 };
 use uuid::Uuid;
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
-use wasm_thread::JoinHandle;
 use web_sys::js_sys::{Function, Reflect, WebAssembly, JSON};
 
 use crate::{
-    api::{ApiBuilderFn, ApiModuleCtx},
+    api::{ApiBuilderFn, ProcessCtx},
     memory::Memory,
     requirements::WasmRequirements,
-    stdout::{ProcessStdOut, StdoutMessage},
+    stdout::ProcessStdOut,
+    ProcessManager,
 };
 
 /// A process in honeyos
-#[derive(Debug)]
 pub struct Process {
     // The process id
     id: Uuid,
@@ -26,14 +25,17 @@ pub struct Process {
     // The current working directory for the process
     cwd: Arc<RwLock<String>>,
 
-    // The thread handle
-    _handle: JoinHandle<()>,
-
     // Flag for if the process is still running
     running: Arc<AtomicBool>,
 
     // The stdout
     stdout: ProcessStdOut,
+
+    // The module binary
+    module: Arc<Vec<u8>>,
+
+    // The api builder fn
+    api_builder: ApiBuilderFn,
 }
 
 impl Process {
@@ -44,43 +46,33 @@ impl Process {
         title: &str,
         working_directory: &str,
         api_builder: ApiBuilderFn,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         // The running flag
         let running = Arc::new(AtomicBool::new(true));
-        let running_thread = running.clone(); // The reference to the running flag sent to the process thread
 
         // The stdout
         let stdout = ProcessStdOut::new();
-        let stdout_thread = stdout.process_buffer();
 
         // The current working directory
         let cwd = Arc::new(RwLock::new(working_directory.to_string()));
-        let cwd_thread = cwd.clone();
 
-        // The execution thread
-        let handle = wasm_thread::spawn_async(async move || {
-            // Youd think there was a cleaner way to do this. But the borrow checker will not sit still unless I do this.
-            let id = id;
-            let wasm_bin = wasm_bin.clone();
-            let running = running_thread.clone();
-            let stdout = stdout_thread.clone();
-            let cwd = cwd_thread.clone();
-            if let Err(e) =
-                thread_executor(id, wasm_bin, running.clone(), stdout, cwd, api_builder).await
-            {
-                log::error!("Failed to execute process {}: {}", id, e);
-                running.store(false, Ordering::Relaxed);
-            }
-        });
+        // Clone the module
+        let module = Arc::new(wasm_bin);
 
-        Self {
+        Ok(Self {
             id,
             title: title.to_string(),
             running,
             stdout,
-            cwd,
-            _handle: handle,
-        }
+            cwd: cwd.clone(),
+            module,
+            api_builder,
+        })
+    }
+
+    /// Spawn the process
+    pub fn spawn(&self) {
+        crate::thread::spawn_process(self.id, &self.module);
     }
 
     /// Get the id
@@ -115,41 +107,96 @@ impl Process {
 }
 
 /// The thread executor
-async fn thread_executor(
-    id: Uuid,
-    wasm_bin: Vec<u8>,
-    running: Arc<AtomicBool>,
-    stdout: Arc<Mutex<Vec<StdoutMessage>>>,
-    cwd: Arc<RwLock<String>>,
-    api_builder: ApiBuilderFn,
-) -> anyhow::Result<()> {
-    let requirements = WasmRequirements::parse(&wasm_bin)?;
+async fn thread_executor(ctx: Arc<ProcessCtx>, api_module: &JsValue) -> anyhow::Result<()> {
+    let environment = setup_environment(&ctx.memory(), &ctx.table())?;
+    let imports = setup_imports(environment, &api_module)?;
 
-    let memory = Arc::new(Mutex::new(Memory::new(
-        requirements.initial_memory,
-        requirements.maximum_memory,
-        requirements.shared_memory,
-    )?));
-    let table = Arc::new(setup_table()?);
+    let instance = init_binary(&ctx.module(), imports).await;
+    exec_instance(instance)?;
+    Ok(())
+}
 
-    let api_ctx: Arc<ApiModuleCtx> = Arc::new(ApiModuleCtx::new(
-        id,
+/// Create the instance in the worker
+#[wasm_bindgen]
+pub async fn create_instance(pid: String, bin: &[u8]) -> WebAssembly::Instance {
+    let pid = Uuid::parse_str(&pid).unwrap();
+    let process_manager = ProcessManager::blocking_get();
+
+    let handle = process_manager.process(pid).expect("Invalid pid");
+    let stdout = handle.stdout().process_buffer();
+    let cwd = handle.cwd.clone();
+
+    // Parse the wasm
+    let requirements = WasmRequirements::parse(&bin).unwrap();
+
+    // Create the memory
+    let memory = Arc::new(Mutex::new(
+        Memory::new(
+            requirements.initial_memory,
+            requirements.maximum_memory,
+            requirements.shared_memory,
+        )
+        .expect("Failed to init binaries memory"),
+    ));
+    let table = Arc::new(setup_table().unwrap());
+
+    let bin = Arc::new(bin.to_vec());
+
+    let ctx: Arc<ProcessCtx> = Arc::new(ProcessCtx::new(
+        pid,
         memory.clone(),
         table.clone(),
-        stdout.clone(),
+        stdout,
         cwd,
+        bin.clone(),
+        handle.api_builder,
     ));
-    let api_module = ApiModuleCtx::js_from_fn(api_builder, api_ctx);
 
-    let environment = setup_environment(&memory, &table)?;
-    let imports = setup_imports(environment, api_module)?;
+    let environment = setup_environment(&ctx.memory(), &ctx.table()).unwrap();
+    let api_module = ctx.build_api();
+    let imports = setup_imports(environment, &api_module).unwrap();
 
-    let instance = init_binary(&wasm_bin, imports).await;
-    exec_instance(instance)?;
+    init_binary(&*bin, imports).await
+}
 
-    // Tell the process manager the process has stopped
-    running.store(false, Ordering::Relaxed);
-    Ok(())
+/// Create a new instance in order to run on a seperate thread
+#[wasm_bindgen]
+pub async fn create_thread_instance(
+    pid: String,
+    bin: &[u8],
+    memory: WebAssembly::Memory,
+) -> WebAssembly::Instance {
+    // TODO: Refactor this to not need to recompile the wasm each time.
+    // Do this by utilizing `WebAssembly::Module``
+
+    let pid = Uuid::parse_str(&pid).unwrap();
+    let process_manager = ProcessManager::blocking_get();
+
+    let handle = process_manager.process(pid).expect("Invalid pid");
+    let stdout = handle.stdout().process_buffer();
+    let cwd = handle.cwd.clone();
+
+    // Create the memory
+    let memory: Arc<Mutex<Memory>> = Arc::new(Mutex::new(Memory::from_inner(memory)));
+    let table = Arc::new(setup_table().unwrap());
+
+    let bin = Arc::new(bin.to_vec());
+
+    let ctx: Arc<ProcessCtx> = Arc::new(ProcessCtx::new(
+        pid,
+        memory.clone(),
+        table.clone(),
+        stdout,
+        cwd,
+        bin.clone(),
+        handle.api_builder,
+    ));
+
+    let environment = setup_environment(&ctx.memory(), &ctx.table()).unwrap();
+    let api_module = ctx.build_api();
+    let imports = setup_imports(environment, &api_module).unwrap();
+
+    init_binary(&*bin, imports).await
 }
 
 /// Setup table
@@ -167,13 +214,10 @@ fn setup_table() -> anyhow::Result<WebAssembly::Table> {
 }
 
 /// Setup the env
-fn setup_environment(
-    memory: &Arc<Mutex<Memory>>,
+pub fn setup_environment(
+    memory: &MutexGuard<Memory>,
     table: &WebAssembly::Table,
 ) -> anyhow::Result<JsValue> {
-    let memory = memory
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Failed to aquire memory lock: {}", e))?;
     let env = JSON::parse("{}").unwrap();
     Reflect::set(&env, &"memory".into(), memory.inner())
         .map_err(|e| anyhow!("Failed to setup env: {:?}", e))?;
@@ -185,7 +229,7 @@ fn setup_environment(
 }
 
 /// Setup the imports object
-fn setup_imports(environment: JsValue, api_module: JsValue) -> anyhow::Result<JsValue> {
+pub fn setup_imports(environment: JsValue, api_module: &JsValue) -> anyhow::Result<JsValue> {
     let imports_object = JSON::parse("{}").unwrap();
     Reflect::set(&imports_object, &"env".into(), &environment)
         .map_err(|e| anyhow::anyhow!("Failed to setup imports: {:?}", e))?;
@@ -308,7 +352,7 @@ fn setup_emscripten_imports(imports_object: &JsValue) -> anyhow::Result<()> {
 }
 
 /// Initialize the wasm instance
-async fn init_binary(bin: &[u8], imports: JsValue) -> WebAssembly::Instance {
+pub async fn init_binary(bin: &[u8], imports: JsValue) -> WebAssembly::Instance {
     let promise = WebAssembly::instantiate_buffer(bin, &imports.unchecked_into());
     let promise = JsFuture::from(promise);
     let instance = promise.await.unwrap();

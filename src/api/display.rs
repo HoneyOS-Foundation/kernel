@@ -2,14 +2,14 @@ use std::{str::FromStr, sync::Arc};
 
 use honeyos_display::{DisplayMode, DisplayServer, KeyBuffer};
 use honeyos_process::{
-    api::{ApiModuleBuilder, ApiModuleCtx},
+    api::{ApiModuleBuilder, ProcessCtx},
     ProcessManager,
 };
 use uuid::Uuid;
 use wasm_bindgen::closure::Closure;
 
 /// Register the display api
-pub fn register_display_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
+pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     // hapi_display_server_register
     // Registers a display for the process
     let ctx_f = ctx.clone();

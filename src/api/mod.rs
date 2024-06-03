@@ -7,12 +7,13 @@ pub mod fs;
 pub mod mem;
 pub mod network;
 pub mod process;
+pub mod thread;
 pub mod time;
 
 use std::sync::Arc;
 
 use honeyos_process::{
-    api::{ApiModuleBuilder, ApiModuleCtx},
+    api::{ApiModuleBuilder, ProcessCtx},
     stdout::StdoutMessage,
 };
 use wasm_bindgen::closure::Closure;
@@ -20,12 +21,12 @@ use wasm_bindgen::closure::Closure;
 use self::{
     browser::register_browser_api, display::register_display_api, fs::register_fs_api,
     mem::register_mem_api, network::register_network_api, process::register_process_api,
-    time::register_time_api,
+    thread::register_thread_api, time::register_time_api,
 };
 
 /// Register the api.
 /// This gets called for every process that gets initialized
-pub fn register_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
+pub fn register_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     register_js_console_api(ctx.clone(), builder);
     register_stdout_api(ctx.clone(), builder);
     register_display_api(ctx.clone(), builder);
@@ -35,10 +36,11 @@ pub fn register_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
     register_mem_api(ctx.clone(), builder);
     register_network_api(ctx.clone(), builder);
     register_fs_api(ctx.clone(), builder);
+    register_thread_api(ctx.clone(), builder);
 }
 
 /// Register the js-console api
-fn register_js_console_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
+fn register_js_console_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     // hapi_js_console_log_info
     // Logs a string to the js console as info
     let ctx_f = ctx.clone();
@@ -86,7 +88,7 @@ fn register_js_console_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilde
 }
 
 /// Register the stdout api
-fn register_stdout_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
+fn register_stdout_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     // stdout_clear
     let ctx_f = ctx.clone();
     builder.register(

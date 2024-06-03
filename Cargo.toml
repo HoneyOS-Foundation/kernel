@@ -11,13 +11,13 @@ honeyos-fs = { path = "crates/honeyos-fs" }
 honeyos-process = { path = "crates/honeyos-process" }
 honeyos-display = { path = "crates/honeyos-display" }
 honeyos-networking = { path = "crates/honeyos-networking" }
+honeyos-bhai = { path = "crates/honeyos-bhai" }
 
 console_error_panic_hook = "0.1.7"
 console_log = { version = "1.0.0" }
 log = "0.4.21"
 wasm-bindgen = "0.2.92"
 wasm-bindgen-futures = "0.4.42"
-wasm_thread = { version = "0.2.0", features = ["es_modules"] }
 web-sys = { version = "0.3.69", features = [
     "console",
     "Document",
@@ -40,6 +40,9 @@ web-sys = { version = "0.3.69", features = [
     "Response",
     "FileReader",
     "Performance",
+] }
+wasm_thread = { git = "https://github.com/adamgerhant/wasm_thread.git", rev = "b0ba16bfe310bab02f18be699926812d4489299a", features = [
+    "es_modules",
 ] }
 anyhow = "1.0.82"
 uuid = { version = "1.8.0", features = ["js", "v4"] }

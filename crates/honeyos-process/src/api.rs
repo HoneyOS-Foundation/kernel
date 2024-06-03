@@ -2,30 +2,35 @@ use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
 use hashbrown::HashMap;
 use uuid::Uuid;
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 use web_sys::js_sys::{Reflect, WebAssembly, JSON};
 
 use crate::{memory::Memory, stdout::StdoutMessage};
 
 /// A function responsible for building the api for wasm processes
-pub type ApiBuilderFn = fn(Arc<ApiModuleCtx>, &mut ApiModuleBuilder);
+pub type ApiBuilderFn = fn(Arc<ProcessCtx>, &mut ApiModuleBuilder);
 
-/// The api module
-pub struct ApiModuleCtx {
+/// The context for the process
+#[wasm_bindgen]
+pub struct ProcessCtx {
     pid: Uuid,
     stdout: Arc<Mutex<Vec<StdoutMessage>>>,
     memory: Arc<Mutex<Memory>>,
     table: Arc<WebAssembly::Table>,
     cwd: Arc<RwLock<String>>,
+    module: Arc<Vec<u8>>,
+    api_builder: ApiBuilderFn,
 }
 
-impl ApiModuleCtx {
+impl ProcessCtx {
     pub fn new(
         pid: Uuid,
         memory: Arc<Mutex<Memory>>,
         table: Arc<WebAssembly::Table>,
         stdout: Arc<Mutex<Vec<StdoutMessage>>>,
         cwd: Arc<RwLock<String>>,
+        module: Arc<Vec<u8>>,
+        api_builder: ApiBuilderFn,
     ) -> Self {
         Self {
             pid,
@@ -33,13 +38,15 @@ impl ApiModuleCtx {
             table,
             stdout,
             cwd,
+            module,
+            api_builder,
         }
     }
 
     /// Build form a builder fn
-    pub fn js_from_fn(f: ApiBuilderFn, context: Arc<ApiModuleCtx>) -> JsValue {
+    pub fn build_api(self: &Arc<Self>) -> JsValue {
         let mut api_module_builder = ApiModuleBuilder::new();
-        f(context, &mut api_module_builder);
+        (self.api_builder)(self.clone(), &mut api_module_builder);
         api_module_builder.build()
     }
 
@@ -71,6 +78,11 @@ impl ApiModuleCtx {
     /// Get the working directory
     pub fn cwd(&self) -> String {
         self.cwd.read().unwrap().clone()
+    }
+
+    /// Get the module
+    pub fn module(&self) -> Arc<Vec<u8>> {
+        self.module.clone()
     }
 
     /// Set the working directory

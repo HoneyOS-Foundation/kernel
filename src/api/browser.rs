@@ -1,6 +1,6 @@
 use std::{ffi::CString, sync::Arc};
 
-use honeyos_process::api::{ApiModuleBuilder, ApiModuleCtx};
+use honeyos_process::api::{ApiModuleBuilder, ProcessCtx};
 use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen};
 
 /// Gets returned to describe a file
@@ -12,7 +12,7 @@ struct FileDescriptor {
 }
 
 /// Register the browser api
-pub fn register_browser_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
+pub fn register_browser_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     // hapi_browser_user_agent
     // Returns a pointer to the user agent.
     // ### Returns

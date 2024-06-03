@@ -11,16 +11,15 @@ use process::Process;
 use uuid::Uuid;
 
 pub mod api;
-pub mod context;
 pub mod memory;
 pub mod process;
 pub mod requirements;
 pub mod stdout;
+pub mod thread;
 
 static mut PROCESS_MANAGER: Option<Arc<Mutex<ProcessManager>>> = None;
 
 /// A manager for the seperate processes in honeyos
-#[derive(Debug)]
 pub struct ProcessManager {
     api_builder: ApiBuilderFn,
     processes: HashMap<Uuid, Process>,
@@ -77,10 +76,14 @@ impl ProcessManager {
         } else {
             id.to_string()
         };
-        self.processes.insert(
-            id,
-            Process::new(id, wasm_bin, &title, working_directory, self.api_builder),
-        );
+        // Insert the process into the hashmap
+        let process =
+            Process::new(id, wasm_bin, &title, working_directory, self.api_builder).unwrap();
+        self.processes.insert(id, process);
+
+        // Spawn the process
+        let process = self.processes.get(&id).unwrap();
+        process.spawn();
         id
     }
 
@@ -96,7 +99,9 @@ impl ProcessManager {
             self.processes.remove(&id);
         }
     }
+}
 
+impl ProcessManager {
     /// Get all the processes
     pub fn processes(&self) -> Values<Uuid, Process> {
         self.processes.values()
@@ -115,5 +120,10 @@ impl ProcessManager {
     /// Get a process
     pub fn process_mut(&mut self, id: Uuid) -> Option<&mut Process> {
         self.processes.get_mut(&id)
+    }
+
+    /// Get the current api builder function
+    pub fn api_builder(&self) -> ApiBuilderFn {
+        self.api_builder
     }
 }

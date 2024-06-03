@@ -1,10 +1,10 @@
 use std::{os::raw::c_void, sync::Arc};
 
-use honeyos_process::api::{ApiModuleBuilder, ApiModuleCtx};
+use honeyos_process::api::{ApiModuleBuilder, ProcessCtx};
 use wasm_bindgen::closure::Closure;
 
 /// Register the memory api
-pub fn register_mem_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
+pub fn register_mem_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     // hapi_mem_alloc
     // Allocate a block of memory and return it's pointer.
     // ### Returns

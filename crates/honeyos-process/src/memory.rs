@@ -1,7 +1,7 @@
 use std::ffi::CString;
 
 use anyhow::anyhow;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
 use web_sys::js_sys::{Reflect, SharedArrayBuffer, Uint8Array, WebAssembly, JSON};
 
 /// (64Kib) The size of one wasm page as specified in the spec:
@@ -75,6 +75,21 @@ impl Memory {
         })
     }
 
+    /// Create from a pre-existing inner.
+    pub fn from_inner(inner: WebAssembly::Memory) -> Self {
+        // ### NOTE (GetAGripGal)
+        // This does not copy the memory regions or maximum memory.
+        // This allows for threads to expand past the specified maximum.
+        // This also makes it that threads cannot use freed memory and must grow the memory.
+        // This is a disaster and needs to be fixed soon!
+        // TODO: Fix the memory regions and maximum memory for threads
+        Self {
+            inner,
+            maximum: None,
+            regions: Vec::new(),
+        }
+    }
+
     /// Read from a certain block of memory
     pub fn read(&self, ptr: u32, len: u32) -> Vec<u8> {
         let buffer = self.inner.buffer();
@@ -123,7 +138,7 @@ impl Memory {
     /// Allocate a block of memory and return it's pointer.
     /// Returns None if the memory exceeds the 32-bit maximum of 4gb
     pub fn alloc(&mut self, size: u32) -> Option<u32> {
-        let buffer = self.inner.buffer().dyn_into::<SharedArrayBuffer>().unwrap();
+        let buffer = self.inner.buffer().dyn_into::<SharedArrayBuffer>().ok()?;
         let current_size = buffer.byte_length();
         let ptr = current_size;
 

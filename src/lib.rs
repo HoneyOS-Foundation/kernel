@@ -1,3 +1,5 @@
+#![feature(async_fn_traits)]
+
 pub mod api;
 pub mod boot;
 

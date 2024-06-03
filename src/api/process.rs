@@ -1,14 +1,14 @@
 use std::{ffi::CString, str::FromStr, sync::Arc};
 
 use honeyos_process::{
-    api::{ApiModuleBuilder, ApiModuleCtx},
+    api::{ApiModuleBuilder, ProcessCtx},
     ProcessManager,
 };
 use uuid::Uuid;
 use wasm_bindgen::closure::Closure;
 
 /// Register the process api
-pub fn register_process_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
+pub fn register_process_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     // hapi_process_get_pid
     // Returns the process id of the current process
     let ctx_f = ctx.clone();

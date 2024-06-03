@@ -4,12 +4,12 @@ use honeyos_networking::{
     request::{RequestMethod, RequestMode, RequestStatus},
     NetworkingManager,
 };
-use honeyos_process::api::{ApiModuleBuilder, ApiModuleCtx};
+use honeyos_process::api::{ApiModuleBuilder, ProcessCtx};
 use uuid::Uuid;
 use wasm_bindgen::closure::Closure;
 
 /// Register the network api
-pub fn register_network_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
+pub fn register_network_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     // hapi_network_request
     // Create a network request and return it's id.
     // ### Returns:

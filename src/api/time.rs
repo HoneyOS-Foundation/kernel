@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use honeyos_process::api::{ApiModuleBuilder, ApiModuleCtx};
+use honeyos_process::api::{ApiModuleBuilder, ProcessCtx};
 use wasm_bindgen::closure::Closure;
 
 /// Register the time api
-pub fn register_time_api(_: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
+pub fn register_time_api(_: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     // hapi_time_now
     // Get the time in seconds since the start of the process
     builder.register(

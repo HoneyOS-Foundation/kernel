@@ -1,12 +1,12 @@
 use std::{ffi::CString, str::FromStr, sync::Arc};
 
 use honeyos_fs::{ramfs::RamFsHandler, FsLabel, FsManager};
-use honeyos_process::api::{ApiModuleBuilder, ApiModuleCtx};
+use honeyos_process::api::{ApiModuleBuilder, ProcessCtx};
 use uuid::Uuid;
 use wasm_bindgen::closure::Closure;
 
 /// Register the fs api
-pub fn register_fs_api(ctx: Arc<ApiModuleCtx>, builder: &mut ApiModuleBuilder) {
+pub fn register_fs_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     // hapi_fs_init_ramfs
     // Register a ram filesystem with the provided label.
     // ### Returns
