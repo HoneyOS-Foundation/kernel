@@ -10,39 +10,45 @@ use wasm_bindgen::closure::Closure;
 /// Register the process api
 pub fn register_process_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     // hapi_process_get_pid
-    // Returns the process id of the current process
+    // Write the proccess id to the buffer
+    // ### Safety
+    // - The buffer size must be at least 37-bytes or unallocated memory will be written to.
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_process_get_pid",
-        Closure::<dyn Fn() -> *const u8>::new(move || {
+        Closure::<dyn Fn(*const u8)>::new(move |buffer| {
             let pid = ctx_f.pid().to_string();
             let mut memory = ctx_f.memory();
-            let Some(ptr) = memory.alloc(pid.len() as u32) else {
-                return std::ptr::null();
-            };
-
             let cstring = CString::new(pid).unwrap();
-            memory.write(ptr, &cstring.as_bytes());
-            ptr as *const u8
+            memory.write(buffer as u32, &cstring.as_bytes());
         })
         .into_js_value(),
     );
 
     // hapi_process_get_cwd
-    // Get the current working directory
+    // Write the current working directory to the buffer
+    // ### Safety
+    // - The buffer size must be at least the size of `hapi_process_get_cwd_length` or unallocated memory will be written to.
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_process_get_cwd",
-        Closure::<dyn Fn() -> *const u8>::new(move || {
+        Closure::<dyn Fn(*mut u8)>::new(move |buffer| {
             let cwd = ctx_f.cwd().clone();
             let mut memory = ctx_f.memory();
-            let Some(ptr) = memory.alloc(cwd.len() as u32) else {
-                return std::ptr::null();
-            };
-
             let cstring = CString::new(cwd).unwrap();
-            memory.write(ptr, &cstring.as_bytes());
-            ptr as *const u8
+            memory.write(buffer as u32, &cstring.as_bytes());
+        })
+        .into_js_value(),
+    );
+
+    // hapi_process_get_cwd_length
+    // Get the string length of current working directory
+    let ctx_f = ctx.clone();
+    builder.register(
+        "hapi_process_get_cwd_length",
+        Closure::<dyn Fn() -> u32>::new(move || {
+            let cwd = ctx_f.cwd().clone();
+            cwd.len() as u32 + 1
         })
         .into_js_value(),
     );
@@ -50,7 +56,9 @@ pub fn register_process_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     // hapi_process_set_cwd
     // Sets the current working directory for the process.
     // ### Note
-    // There are no checks to see if the working directory is valid
+    // There are no checks to see if the working directory is valid.
+    // ### Safety
+    // - The dir string must be a valid string or unallocated memory will be written to
     // ### Returns
     // - `0` On success
     // - `-1` If the path is invalid
@@ -71,13 +79,16 @@ pub fn register_process_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
 
     // hapi_process_spawn_subprocess
     // Spawn a wasm binary as a subprocess.
+    // Writes the pid of the process to the provided buffer, unless null.
+    // ### Safety
+    // - The provided buffer must be at least 37-bytes of length or unallocated memory will be written to
     // ### Returns
-    // - The pid of the subprocess on success.
-    // - NULL if the subprocess failed to spawn.
+    // - `0` On success
+    // - `-1` On failure
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_process_spawn_subprocess",
-        Closure::<dyn Fn(*const u8, u32) -> *const u8>::new(move |bin, bin_len| {
+        Closure::<dyn Fn(*const u8, u32, *mut u8) -> i32>::new(move |bin, bin_len, pid_out| {
             let mut memory = ctx_f.memory();
             let wasm_bin = memory.read(bin as u32, bin_len);
 
@@ -87,62 +98,94 @@ pub fn register_process_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 Ok(pid) => pid,
                 Err(e) => {
                     log::error!("Failed to spawn subprocess: {}", e);
-                    return std::ptr::null();
+                    return -1;
                 }
             };
 
-            // Return the process id
-            let pid = pid.to_string();
-            let Some(ptr) = memory.alloc(pid.len() as u32) else {
-                log::error!("Failed to allocate memory for pid");
-                return std::ptr::null();
-            };
+            if pid_out == std::ptr::null_mut() {
+                return 0;
+            }
 
+            let pid = pid.to_string();
             let cstring = CString::new(pid).unwrap();
-            memory.write(ptr, &cstring.as_bytes());
-            ptr as *const u8
+            memory.write(pid_out as u32, &cstring.as_bytes());
+            0
         })
         .into_js_value(),
     );
 
     // hapi_process_stdout
-    // Return the stdout of a process
+    // Write the stoud of a process to a buffer
+    // ### Safety
+    // - The out buffer must be equal to `hapi_process_stdout_length` or unallocated memory will be written to.
+    // - The id must be at least 37-bytes in length and a valid string or unallocated memory will be read from.
     // ### Returns
-    // - The stdout of a process if successful
-    // - NULL if the process does not exists, or if the memory allocation failed
+    // - `0` On success
+    // - `-1` on failure
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_process_stdout",
-        Closure::<dyn Fn(*const u8) -> *const u8>::new(move |id| {
+        Closure::<dyn Fn(*const u8, *mut u8) -> i32>::new(move |id, out_buffer| {
             let mut memory = ctx_f.memory();
             let id = memory.read_str(id as u32);
             let Some(id) = id else {
-                return std::ptr::null();
+                return -1;
             };
             let Ok(id) = Uuid::from_str(&id) else {
-                return std::ptr::null();
+                return -1;
             };
 
             let mut process_manager = ProcessManager::blocking_get();
             let Some(process) = process_manager.process_mut(id) else {
-                return std::ptr::null();
+                return -1;
             };
 
             let stdout = process.stdout_mut();
             stdout.sync();
             let buffer = stdout.buffer();
-            let Some(ptr) = memory.alloc(buffer.len() as u32) else {
-                return std::ptr::null();
-            };
-            memory.write(ptr, &buffer.as_bytes());
+            memory.write(out_buffer as u32, &buffer.as_bytes());
+            0
+        })
+        .into_js_value(),
+    );
 
-            ptr as *const u8
+    // hapi_process_stdout_length
+    // Returns the current length of the stdout buffer
+    // ### Returns
+    // - `0` On success
+    // - `-1` If the id cannot be read from memory
+    // ### Safety
+    // - The id must be at least 37-bytes in length and a valid string or unallocated memory will be read from.
+    let ctx_f = ctx.clone();
+    builder.register(
+        "hapi_process_stdout_length",
+        Closure::<dyn Fn(*const u8) -> i32>::new(move |id| {
+            let memory = ctx_f.memory();
+            let id = memory.read_str(id as u32);
+            let Some(id) = id else {
+                return -1;
+            };
+            let Ok(id) = Uuid::from_str(&id) else {
+                return -1;
+            };
+
+            let mut process_manager = ProcessManager::blocking_get();
+            let Some(process) = process_manager.process_mut(id) else {
+                return -1;
+            };
+
+            let stdout = process.stdout_mut();
+            stdout.sync();
+            let buffer = stdout.buffer();
+            buffer.len() as i32
         })
         .into_js_value(),
     );
 
     // hapi_process_alive
     // Returns true if the process is alive
+    // ### Safety
+    // - The id must be at least 37-bytes in length and a valid string or unallocated memory will be read from.
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_process_alive",
