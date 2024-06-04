@@ -44,7 +44,7 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
             if !display_server.has_display(id) {
                 return -1;
             }
-            display_server.set_current(ctx_f.pid());
+            display_server.set_current(id);
             return 0;
         })
         .into_js_value(),

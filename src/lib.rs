@@ -34,17 +34,9 @@ async fn main() {
 fn execution_loop(_time_stamp: f64) -> anyhow::Result<()> {
     let window = get_window()?;
 
-    // Update the network manager
-    if let Some(mut network_manager) = NetworkingManager::get_writer() {
-        if let Err(e) = network_manager.update() {
-            log::error!("Failed to complete network request: {}", e);
-        }
-    }
-
-    // Render the display server
-    if let Some(mut display_server) = DisplayServer::get() {
-        display_server.render();
-    }
+    handle_spawn_requests();
+    update_network_manager();
+    render_display_server();
 
     window
         .request_animation_frame(
@@ -54,6 +46,40 @@ fn execution_loop(_time_stamp: f64) -> anyhow::Result<()> {
         )
         .map_err(|e| anyhow!("Failed to request animation frame: {:?}", e))?;
     Ok(())
+}
+
+/// Handle the spawn requests
+fn handle_spawn_requests() {
+    if let Some(mut process_manager) = ProcessManager::get() {
+        for request in process_manager.requests() {
+            if let Some(process) = process_manager.process(*request) {
+                if let Err(e) = process.spawn() {
+                    log::error!("Failed to spawn process: {}", e);
+                }
+            }
+        }
+        process_manager.requests_mut().clear();
+    }
+}
+
+/// Update the network manager
+fn update_network_manager() {
+    // Update the network manager
+    if let Some(mut network_manager) = NetworkingManager::get_writer() {
+        if let Err(e) = network_manager.update() {
+            log::error!("Failed to complete network request: {}", e);
+        }
+    }
+}
+
+/// Render the display server
+fn render_display_server() {
+    // Render the display server
+    if let Some(mut display_server) = DisplayServer::get() {
+        display_server.render();
+    } else {
+        log::info!("Missed display frame");
+    }
 }
 
 /// The panic hook for the WASM module

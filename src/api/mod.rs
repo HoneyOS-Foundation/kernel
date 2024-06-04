@@ -94,7 +94,7 @@ fn register_stdout_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     builder.register(
         "hapi_stdout_clear",
         Closure::<dyn Fn()>::new(move || loop {
-            if let Ok(mut stdout) = ctx_f.stdout().lock() {
+            if let Ok(mut stdout) = ctx_f.stdout().try_lock() {
                 stdout.push(StdoutMessage::Clear);
                 break;
             }
@@ -106,7 +106,7 @@ fn register_stdout_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     builder.register(
         "hapi_stdout_clear_line",
         Closure::<dyn Fn()>::new(move || loop {
-            if let Ok(mut stdout) = ctx_f.stdout().lock() {
+            if let Ok(mut stdout) = ctx_f.stdout().try_lock() {
                 stdout.push(StdoutMessage::ClearLine);
                 break;
             }
@@ -119,7 +119,7 @@ fn register_stdout_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
         "hapi_stdout_write",
         Closure::<dyn Fn(*const u8)>::new(move |ptr: *const u8| loop {
             let stdout = ctx_f.stdout();
-            let Ok(mut stdout) = stdout.lock() else {
+            let Ok(mut stdout) = stdout.try_lock() else {
                 continue;
             };
             let string = ctx_f.memory().read_str(ptr as u32);

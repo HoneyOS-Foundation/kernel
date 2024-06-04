@@ -9,20 +9,30 @@ self.onmessage = event => {
     }).then(async () => {
         let instance = await create_thread_instance(pid, module, memory);
 
-        // Make sure the module exports the function table
-        if (!Object.hasOwn(instance.exports, '__indirect_function_table')) {
-            console.error("Wasm module must have it's table exported as `__indirect_function_table` in order to support multithreading.");
+        // Find a table in exports
+        let table = undefined;
+        for (const key in instance.exports) {
+            const value = instance.exports[key];
+            if (value.toString() === '[object WebAssembly.Table]') {
+                table = value;
+            }
+        }
+
+        // Fail if no table exported
+        if (table === undefined) {
+            console.error("Wasm binary must export table for multithreading support.");
             close();
             return;
         }
 
         // Make sure the function pointer is valid
-        if (instance.exports.__indirect_function_table.length < f_ptr) {
+        if (table.length < f_ptr) {
             console.error("The function pointer `" + f_ptr + "` is invalid");
             close();
             return;
         }
-        instance.exports.__indirect_function_table.get(f_ptr)();
+        const function_ptr = table.get(f_ptr);
+        function_ptr();
         close();
     })
 }

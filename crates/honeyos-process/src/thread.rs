@@ -8,13 +8,12 @@ use web_sys::{js_sys::Uint8Array, Blob, Url, Worker, WorkerOptions, WorkerType};
 use crate::api::ProcessCtx;
 
 /// Spawn a process on a thread
-pub(crate) fn spawn_process(pid: Uuid, module: &[u8]) {
+pub(crate) fn spawn_process(pid: Uuid, module: &[u8]) -> anyhow::Result<Worker> {
     let mut options = WorkerOptions::new();
     options.type_(WorkerType::Module);
 
     let worker = Worker::new_with_options(&get_worker_script_process(), &options)
-        .map_err(|e| anyhow::anyhow!("Failed to create worker: {:?}", e))
-        .unwrap();
+        .map_err(|e| anyhow::anyhow!("Failed to create worker: {:?}", e))?;
     let msg = web_sys::js_sys::Array::new();
 
     // Send the pid
@@ -28,8 +27,9 @@ pub(crate) fn spawn_process(pid: Uuid, module: &[u8]) {
 
     worker
         .post_message(&msg)
-        .map_err(|e| anyhow::anyhow!("Failed to send message to worker: {:?}", e))
-        .unwrap();
+        .map_err(|e| anyhow::anyhow!("Failed to send message to worker: {:?}", e))?;
+
+    Ok(worker)
 }
 
 /// Spawn a thread as a subprocess

@@ -83,11 +83,18 @@ pub fn register_process_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
 
             let mut process_manager = ProcessManager::blocking_get();
             let cwd = ctx_f.cwd();
-            let pid = process_manager.spawn(wasm_bin, None, &cwd);
+            let pid = match process_manager.spawn(wasm_bin, None, &cwd) {
+                Ok(pid) => pid,
+                Err(e) => {
+                    log::error!("Failed to spawn subprocess: {}", e);
+                    return std::ptr::null();
+                }
+            };
 
             // Return the process id
             let pid = pid.to_string();
             let Some(ptr) = memory.alloc(pid.len() as u32) else {
+                log::error!("Failed to allocate memory for pid");
                 return std::ptr::null();
             };
 

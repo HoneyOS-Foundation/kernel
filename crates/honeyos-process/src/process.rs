@@ -6,7 +6,10 @@ use std::sync::{
 use uuid::Uuid;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::js_sys::{Function, Reflect, WebAssembly, JSON};
+use web_sys::{
+    js_sys::{Function, Reflect, WebAssembly, JSON},
+    Worker,
+};
 
 use crate::{
     api::{ApiBuilderFn, ProcessCtx},
@@ -32,7 +35,7 @@ pub struct Process {
     stdout: ProcessStdOut,
 
     // The module binary
-    module: Arc<Vec<u8>>,
+    bin: Arc<Vec<u8>>,
 
     // The api builder fn
     api_builder: ApiBuilderFn,
@@ -48,14 +51,11 @@ impl Process {
         api_builder: ApiBuilderFn,
     ) -> anyhow::Result<Self> {
         // The running flag
-        let running = Arc::new(AtomicBool::new(true));
-
+        let running = Arc::new(AtomicBool::new(false));
         // The stdout
         let stdout = ProcessStdOut::new();
-
         // The current working directory
         let cwd = Arc::new(RwLock::new(working_directory.to_string()));
-
         // Clone the module
         let module = Arc::new(wasm_bin);
 
@@ -65,14 +65,16 @@ impl Process {
             running,
             stdout,
             cwd: cwd.clone(),
-            module,
+            bin: module,
             api_builder,
         })
     }
 
     /// Spawn the process
-    pub fn spawn(&self) {
-        crate::thread::spawn_process(self.id, &self.module);
+    pub fn spawn(&self) -> anyhow::Result<()> {
+        crate::thread::spawn_process(self.id, &self.bin)?;
+        self.running.store(true, Ordering::Release);
+        Ok(())
     }
 
     /// Get the id
@@ -104,16 +106,11 @@ impl Process {
     pub fn cwd(&self) -> String {
         self.cwd.read().unwrap().clone()
     }
-}
 
-/// The thread executor
-async fn thread_executor(ctx: Arc<ProcessCtx>, api_module: &JsValue) -> anyhow::Result<()> {
-    let environment = setup_environment(&ctx.memory(), &ctx.table())?;
-    let imports = setup_imports(environment, &api_module)?;
-
-    let instance = init_binary(&ctx.module(), imports).await;
-    exec_instance(instance)?;
-    Ok(())
+    /// Kill the process
+    pub fn kill(&self) {
+        self.running.store(true, Ordering::Relaxed);
+    }
 }
 
 /// Create the instance in the worker
@@ -138,8 +135,8 @@ pub async fn create_instance(pid: String, bin: &[u8]) -> WebAssembly::Instance {
         )
         .expect("Failed to init binaries memory"),
     ));
-    let table = Arc::new(setup_table().unwrap());
 
+    let table = Arc::new(setup_table().unwrap());
     let bin = Arc::new(bin.to_vec());
 
     let ctx: Arc<ProcessCtx> = Arc::new(ProcessCtx::new(
@@ -361,25 +358,4 @@ pub async fn init_binary(bin: &[u8], imports: JsValue) -> WebAssembly::Instance 
         .unwrap()
         .dyn_into()
         .unwrap()
-}
-
-/// Execute the binary by calling its entrypoint.
-/// The entrypoint is the _start method
-fn exec_instance(instance: WebAssembly::Instance) -> anyhow::Result<()> {
-    let exports = instance.exports();
-
-    let entrypoint: Function = Reflect::get(&exports, &"_start".into())
-        .map_err(|_| {
-            anyhow::anyhow!("Could not execute binary, no entrypoint named `_start` found")
-        })?
-        .dyn_into()
-        .map_err(|_| {
-            anyhow::anyhow!("Could not execute binary, Entrypoint `_start` must be a function.")
-        })?;
-    drop(exports);
-
-    entrypoint
-        .call0(&JsValue::undefined())
-        .map_err(|e| anyhow::anyhow!("Failed to execute `_start` function: {:?}", e))?;
-    Ok(())
 }

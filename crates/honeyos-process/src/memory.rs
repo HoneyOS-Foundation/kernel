@@ -1,7 +1,7 @@
 use std::ffi::CString;
 
 use anyhow::anyhow;
-use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
+use wasm_bindgen::JsCast;
 use web_sys::js_sys::{Reflect, SharedArrayBuffer, Uint8Array, WebAssembly, JSON};
 
 /// (64Kib) The size of one wasm page as specified in the spec:
@@ -196,6 +196,7 @@ impl Memory {
         };
         let region = self.regions.get_mut(index).unwrap();
         if region.free {
+            log::error!("Double free!");
             return None;
         }
         region.free = true;

@@ -23,6 +23,7 @@ static mut PROCESS_MANAGER: Option<Arc<Mutex<ProcessManager>>> = None;
 pub struct ProcessManager {
     api_builder: ApiBuilderFn,
     processes: HashMap<Uuid, Process>,
+    spawn_requests: Vec<Uuid>, // Spawns are handled by the kernel
 }
 
 impl ProcessManager {
@@ -34,6 +35,7 @@ impl ProcessManager {
             PROCESS_MANAGER = Some(Arc::new(Mutex::new(ProcessManager {
                 api_builder,
                 processes: HashMap::new(),
+                spawn_requests: Vec::new(),
             })));
         });
     }
@@ -69,7 +71,7 @@ impl ProcessManager {
         wasm_bin: Vec<u8>,
         title: Option<&str>,
         working_directory: &str,
-    ) -> Uuid {
+    ) -> anyhow::Result<Uuid> {
         let id = Uuid::new_v4();
         let title = if let Some(title) = title {
             title.to_string()
@@ -82,9 +84,8 @@ impl ProcessManager {
         self.processes.insert(id, process);
 
         // Spawn the process
-        let process = self.processes.get(&id).unwrap();
-        process.spawn();
-        id
+        self.spawn_requests.push(id);
+        Ok(id)
     }
 
     /// Check for the status of each process and remove those no longer running
@@ -125,5 +126,15 @@ impl ProcessManager {
     /// Get the current api builder function
     pub fn api_builder(&self) -> ApiBuilderFn {
         self.api_builder
+    }
+
+    /// Get the spawn requests
+    pub fn requests(&self) -> &[Uuid] {
+        &self.spawn_requests
+    }
+
+    /// Get the spawn requests
+    pub fn requests_mut(&mut self) -> &mut Vec<Uuid> {
+        &mut self.spawn_requests
     }
 }
