@@ -6,10 +6,7 @@ use std::sync::{
 use uuid::Uuid;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{
-    js_sys::{Function, Reflect, WebAssembly, JSON},
-    Worker,
-};
+use web_sys::js_sys::{Function, Reflect, WebAssembly, JSON};
 
 use crate::{
     api::{ApiBuilderFn, ProcessCtx},

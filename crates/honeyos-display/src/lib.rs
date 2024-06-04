@@ -1,29 +1,17 @@
 use std::sync::{Arc, Mutex, MutexGuard, Once};
-
-use hashbrown::HashMap;
-use uuid::Uuid;
 use web_sys::{
     wasm_bindgen::{closure::Closure, JsCast},
     Document, HtmlElement, KeyboardEvent, Window,
 };
 
-/// The static instance of the display server
-static mut DISPLAY_SERVER: Option<Arc<Mutex<DisplayServer>>> = None;
+/// The static instance of the display
+static mut DISPLAY: Option<Arc<Mutex<Display>>> = None;
 
 /// The display mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisplayMode {
     Text,
     FrameBuffer,
-}
-
-/// A display for a process
-#[derive(Debug)]
-pub struct Display {
-    text: String,
-    pub mode: DisplayMode,
-    pub keybuffer: KeyBuffer,
-    pub updated: bool,
 }
 
 /// The keybuffer registered to the display
@@ -34,35 +22,28 @@ pub struct KeyBuffer {
     pub ctrl: bool,
 }
 
-/// The honeyos display server.
+/// The honeyos display.
 /// Manages the display for honeyos processes.
-/// A display with a uuid nil value is also registerd for kernel output
 #[derive(Debug)]
-pub struct DisplayServer {
+pub struct Display {
     root: Option<HtmlElement>,
-    current: Uuid,
-    displays: HashMap<Uuid, Display>,
+    text: String,
+    pub mode: DisplayMode,
+    pub keybuffer: KeyBuffer,
+    pub updated: bool,
 }
 
-impl DisplayServer {
+impl Display {
     /// Get the static instance
     pub fn get<'a>() -> Option<MutexGuard<'a, Self>> {
-        let display = unsafe {
-            DISPLAY_SERVER
-                .as_ref()
-                .expect("Display server not initialized")
-        };
+        let display = unsafe { DISPLAY.as_ref().expect("Display server not initialized") };
         display.try_lock().ok()
     }
 
     /// Get the static instance.
     /// Blocks until locked.
     pub fn blocking_get<'a>() -> MutexGuard<'a, Self> {
-        let display = unsafe {
-            DISPLAY_SERVER
-                .as_ref()
-                .expect("Display server not initialized")
-        };
+        let display = unsafe { DISPLAY.as_ref().expect("Display server not initialized") };
         loop {
             if let Ok(display) = display.try_lock() {
                 return display;
@@ -71,8 +52,8 @@ impl DisplayServer {
     }
 }
 
-impl DisplayServer {
-    /// Initialize the display server.
+impl Display {
+    /// Initialize the display.
     /// Setups up the html structure.
     /// Should only be called once.
     pub fn init_once() {
@@ -85,75 +66,20 @@ impl DisplayServer {
             let root = create_root_node(&document);
             register_callbacks(&window);
 
-            // Register a display at Uuid::nil for kernel rendering
-            let mut displays = HashMap::new();
-            displays.insert(
-                Uuid::nil(),
-                Display {
+            unsafe {
+                DISPLAY = Some(Arc::new(Mutex::new(Display {
+                    root: Some(root),
                     text: String::new(),
-                    mode: DisplayMode::Text,
                     keybuffer: KeyBuffer {
                         key: -1,
                         shift: false,
                         ctrl: false,
                     },
+                    mode: DisplayMode::Text,
                     updated: false,
-                },
-            );
-
-            unsafe {
-                DISPLAY_SERVER = Some(Arc::new(Mutex::new(DisplayServer {
-                    root: Some(root),
-                    current: Uuid::nil(),
-                    displays,
                 })))
             }
         });
-    }
-
-    /// Set the current process to be displayed
-    pub fn set_current(&mut self, id: Uuid) -> Option<()> {
-        self.current = id;
-        let display = self.display_mut(id)?;
-        display.updated = true;
-        Some(())
-    }
-
-    /// Register a display
-    /// Does nothing if already registered
-    pub fn register(&mut self, process: Uuid, mode: DisplayMode) {
-        if self.displays.contains_key(&process) {
-            return;
-        }
-
-        self.displays.insert(
-            process,
-            Display {
-                text: String::new(),
-                keybuffer: KeyBuffer {
-                    key: -1,
-                    shift: false,
-                    ctrl: false,
-                },
-                mode,
-                updated: false,
-            },
-        );
-    }
-
-    /// Check if a process has a display registered
-    pub fn has_display(&self, id: Uuid) -> bool {
-        self.displays.contains_key(&id)
-    }
-
-    /// Get a display
-    pub fn display(&self, id: Uuid) -> Option<&Display> {
-        self.displays.get(&id)
-    }
-
-    /// Get a display
-    pub fn display_mut(&mut self, id: Uuid) -> Option<&mut Display> {
-        self.displays.get_mut(&id)
     }
 
     /// Get the root element
@@ -162,23 +88,21 @@ impl DisplayServer {
         self.root.as_ref()
     }
 
-    /// Update the display server and render to the screen
+    /// Update the display and render to the screen
     pub fn render(&mut self) {
-        let display = self.displays.get_mut(&self.current).unwrap();
-
-        if !display.updated {
+        if !self.updated {
             return;
         }
-        display.updated = false;
+        self.updated = false;
 
         let root = self
             .root
             .as_ref()
             .expect("Display server not yet initialized!");
 
-        match display.mode {
+        match self.mode {
             DisplayMode::Text => {
-                let sanitized = html_escape(&display.text);
+                let sanitized = html_escape(&self.text);
                 let colored = text_to_terminal(&sanitized);
 
                 root.set_inner_html(&colored);
@@ -287,11 +211,9 @@ fn register_callbacks(window: &Window) {
             Closure::<dyn Fn(KeyboardEvent)>::new(|event: KeyboardEvent| loop {
                 event.prevent_default();
 
-                let Some(mut display_server) = DisplayServer::get() else {
+                let Some(mut display) = Display::get() else {
                     continue;
                 };
-                let pid = display_server.current;
-                let display = display_server.display_mut(pid).unwrap();
                 display.keybuffer = KeyBuffer {
                     key: event.key_code() as i32,
                     shift: event.shift_key(),

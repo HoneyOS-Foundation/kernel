@@ -4,7 +4,7 @@ pub mod api;
 pub mod boot;
 
 use anyhow::anyhow;
-use honeyos_display::DisplayServer;
+use honeyos_display::Display;
 use honeyos_fs::FsManager;
 use honeyos_networking::NetworkingManager;
 use honeyos_process::ProcessManager;
@@ -17,7 +17,7 @@ async fn main() {
     set_panic_hook();
 
     // Initialize kernel systems
-    DisplayServer::init_once();
+    Display::init_once();
     FsManager::init_once();
     ProcessManager::init_once(api::register_api);
     NetworkingManager::init_once();
@@ -75,7 +75,7 @@ fn update_network_manager() {
 /// Render the display server
 fn render_display_server() {
     // Render the display server
-    if let Some(mut display_server) = DisplayServer::get() {
+    if let Some(mut display_server) = Display::get() {
         display_server.render();
     } else {
         log::info!("Missed display frame");
@@ -89,7 +89,7 @@ fn set_panic_hook() {
         std::panic::set_hook(Box::new(|panic_info| {
             log::error!("Kernel Panic: {}", panic_info);
 
-            let display_server = DisplayServer::get().unwrap();
+            let display_server = Display::get().unwrap();
             let root = display_server.root().unwrap();
             root.set_inner_text(&format!("Kernel Panic: {}", panic_info));
         }));

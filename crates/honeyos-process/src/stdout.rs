@@ -17,7 +17,6 @@ pub struct ProcessStdOut {
 }
 
 impl ProcessStdOut {
-    /// Create a new StdOut instance
     pub fn new() -> Self {
         Self {
             process_buffer: Arc::new(Mutex::new(Vec::new())),

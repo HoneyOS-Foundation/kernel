@@ -1,55 +1,14 @@
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
-use honeyos_display::{DisplayMode, DisplayServer, KeyBuffer};
+use honeyos_display::{Display, KeyBuffer};
 use honeyos_process::{
     api::{ApiModuleBuilder, ProcessCtx},
     ProcessManager,
 };
-use uuid::Uuid;
 use wasm_bindgen::closure::Closure;
 
 /// Register the display api
 pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
-    // hapi_display_server_register
-    // Registers a display for the process
-    let ctx_f = ctx.clone();
-    builder.register(
-        "hapi_display_server_register",
-        Closure::<dyn Fn()>::new(move || {
-            let mut display_server = DisplayServer::blocking_get();
-            display_server.register(ctx_f.pid(), DisplayMode::Text);
-        })
-        .into_js_value(),
-    );
-
-    // hapi_display_server_claim_main
-    // Claim the display server, displaying the display with the provided id
-    // ### Returns
-    // - `0` on success
-    // - `-1` if no display is registered
-    // - `-2` if the id is invalid
-    let ctx_f = ctx.clone();
-    builder.register(
-        "hapi_display_server_claim_main",
-        Closure::<dyn Fn(*const u8) -> i32>::new(move |id| {
-            let memory = ctx_f.memory();
-            let Some(id) = &memory.read_str(id as u32) else {
-                return -2;
-            };
-            let Ok(id) = Uuid::from_str(&id) else {
-                return -2;
-            };
-
-            let mut display_server = DisplayServer::blocking_get();
-            if !display_server.has_display(id) {
-                return -1;
-            }
-            display_server.set_current(id);
-            return 0;
-        })
-        .into_js_value(),
-    );
-
     // hapi_display_push_stdout
     // Push stdout to the display's text-mode buffer.
     // ### Returns
@@ -59,10 +18,7 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     builder.register(
         "hapi_display_push_stdout",
         Closure::<dyn Fn() -> i32>::new(move || {
-            let mut display_server = DisplayServer::blocking_get();
-            let Some(display) = display_server.display_mut(ctx_f.pid()) else {
-                return -1;
-            };
+            let mut display = Display::blocking_get();
 
             // Get stdout from the process manager
             let mut process_manager = ProcessManager::blocking_get();
@@ -82,21 +38,16 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     // Set the text in the displays text-mode buffer.
     // ### Returns
     // - `0` on success
-    // - `-1` if no display is registered
-    // - `-2` if the string is invalid
+    // - `-1` if the string is invalid
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_set_text",
         Closure::<dyn Fn(*const u8) -> i32>::new(move |ptr: *const u8| {
-            let mut display_server = DisplayServer::blocking_get();
-            let Some(display) = display_server.display_mut(ctx_f.pid()) else {
-                return -1;
-            };
-
             let memory = ctx_f.memory();
             let Some(string) = &memory.read_str(ptr as u32) else {
-                return -2;
+                return -1;
             };
+            let mut display = Display::blocking_get();
             display.set_text(string);
             return 0;
         })
@@ -107,15 +58,10 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     // Get the key in the displays key buffer. Clears it afterwards.
     // ### Returns
     // - `-1` or if the key buffer is empty.
-    // - `-2` if no display is registered.
-    let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_get_key_buffer",
         Closure::<dyn Fn() -> i32>::new(move || loop {
-            let mut display_server = DisplayServer::blocking_get();
-            let Some(display) = display_server.display_mut(ctx_f.pid()) else {
-                return -2;
-            };
+            let display = Display::blocking_get();
             return display.keybuffer.key;
         })
         .into_js_value(),
@@ -125,14 +71,10 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     // Whether or not the shift key is in the key buffer
     // ### Returns
     // - `-1` if no display is registered.
-    let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_get_key_shift",
         Closure::<dyn Fn() -> i32>::new(move || loop {
-            let mut display_server = DisplayServer::blocking_get();
-            let Some(display) = display_server.display_mut(ctx_f.pid()) else {
-                return -1;
-            };
+            let display = Display::blocking_get();
             return display.keybuffer.shift as i32;
         })
         .into_js_value(),
@@ -142,14 +84,10 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     // Whether or not the control key is in the key buffer
     // ### Returns
     // - `-1` if no display is registered.
-    let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_get_key_ctrl",
         Closure::<dyn Fn() -> i32>::new(move || loop {
-            let mut display_server = DisplayServer::blocking_get();
-            let Some(display) = display_server.display_mut(ctx_f.pid()) else {
-                return -1;
-            };
+            let display = Display::blocking_get();
             return display.keybuffer.ctrl as i32;
         })
         .into_js_value(),
@@ -159,14 +97,10 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     // Clears the key buffer of the display
     // ### Returns
     // - `-1` if no display is registered.
-    let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_clear_key",
         Closure::<dyn Fn() -> i32>::new(move || loop {
-            let mut display_server = DisplayServer::blocking_get();
-            let Some(display) = display_server.display_mut(ctx_f.pid()) else {
-                return -1;
-            };
+            let mut display = Display::blocking_get();
             display.keybuffer = KeyBuffer {
                 key: -1,
                 shift: false,
