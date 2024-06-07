@@ -75,7 +75,7 @@ fn update_network_manager() {
 /// Render the display server
 fn render_display_server() {
     // Render the display server
-    if let Some(mut display_server) = Display::get() {
+    if let Some(mut display_server) = Display::get_writer() {
         display_server.render();
     } else {
         log::info!("Missed display frame");
@@ -89,7 +89,7 @@ fn set_panic_hook() {
         std::panic::set_hook(Box::new(|panic_info| {
             log::error!("Kernel Panic: {}", panic_info);
 
-            let display_server = Display::get().unwrap();
+            let display_server = Display::get_reader().unwrap();
             let root = display_server.root().unwrap();
             root.set_inner_text(&format!("Kernel Panic: {}", panic_info));
         }));

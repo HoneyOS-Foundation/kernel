@@ -1,11 +1,15 @@
-use std::sync::{Arc, Mutex, MutexGuard, Once};
+use error::Error;
+use std::sync::{Arc, Once, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use uuid::Uuid;
 use web_sys::{
     wasm_bindgen::{closure::Closure, JsCast},
     Document, HtmlElement, KeyboardEvent, Window,
 };
 
+pub mod error;
+
 /// The static instance of the display
-static mut DISPLAY: Option<Arc<Mutex<Display>>> = None;
+static mut DISPLAY: Option<Arc<RwLock<Display>>> = None;
 
 /// The display mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,25 +32,47 @@ pub struct KeyBuffer {
 pub struct Display {
     root: Option<HtmlElement>,
     text: String,
+    control: Uuid,
     pub mode: DisplayMode,
     pub keybuffer: KeyBuffer,
     pub updated: bool,
 }
 
 impl Display {
-    /// Get the static instance
-    pub fn get<'a>() -> Option<MutexGuard<'a, Self>> {
-        let display = unsafe { DISPLAY.as_ref().expect("Display server not initialized") };
-        display.try_lock().ok()
+    /// Get the static instance with write access
+    pub fn get_writer<'a>() -> Option<RwLockWriteGuard<'a, Self>> {
+        let networking_manager =
+            unsafe { DISPLAY.as_ref().expect("Display server not initialized") };
+        networking_manager.try_write().ok()
     }
 
-    /// Get the static instance.
+    /// Get the static instance with write access
     /// Blocks until locked.
-    pub fn blocking_get<'a>() -> MutexGuard<'a, Self> {
-        let display = unsafe { DISPLAY.as_ref().expect("Display server not initialized") };
+    pub fn blocking_get_writer<'a>() -> RwLockWriteGuard<'a, Self> {
+        let networking_manager =
+            unsafe { DISPLAY.as_ref().expect("Display server not initialized") };
         loop {
-            if let Ok(display) = display.try_lock() {
-                return display;
+            if let Ok(networking_manager) = networking_manager.try_write() {
+                return networking_manager;
+            }
+        }
+    }
+
+    /// Get the static instance with read access
+    pub fn get_reader<'a>() -> Option<RwLockReadGuard<'a, Self>> {
+        let networking_manager =
+            unsafe { DISPLAY.as_ref().expect("Display server not initialized") };
+        networking_manager.try_read().ok()
+    }
+
+    /// Get the static instance with read access
+    /// Blocks until aqcuired
+    pub fn blocking_get_reader<'a>() -> RwLockReadGuard<'a, Self> {
+        let networking_manager =
+            unsafe { DISPLAY.as_ref().expect("Display server not initialized") };
+        loop {
+            if let Ok(networking_manager) = networking_manager.try_read() {
+                return networking_manager;
             }
         }
     }
@@ -67,7 +93,7 @@ impl Display {
             register_callbacks(&window);
 
             unsafe {
-                DISPLAY = Some(Arc::new(Mutex::new(Display {
+                DISPLAY = Some(Arc::new(RwLock::new(Display {
                     root: Some(root),
                     text: String::new(),
                     keybuffer: KeyBuffer {
@@ -76,6 +102,7 @@ impl Display {
                         ctrl: false,
                     },
                     mode: DisplayMode::Text,
+                    control: Uuid::nil(),
                     updated: false,
                 })))
             }
@@ -86,6 +113,31 @@ impl Display {
     /// This is an implementation detail and should usually not be used outside of the kernel.
     pub fn root(&self) -> Option<&HtmlElement> {
         self.root.as_ref()
+    }
+
+    /// Attempt to change the process in control
+    pub fn assume_control(&mut self, pid: Uuid) -> Result<(), Error> {
+        if !self.control.is_nil() {
+            return Err(Error::DisplayOccupied);
+        }
+        self.control = pid;
+        Ok(())
+    }
+
+    /// Override control of the current process
+    pub fn override_control(&mut self, pid: Uuid) {
+        // For when the situation is dire
+        self.control = pid;
+    }
+
+    /// Release the control from the display
+    pub fn release_control(&mut self) {
+        self.control = Uuid::nil();
+    }
+
+    /// Check if a process has control
+    pub fn has_control(&self, pid: Uuid) -> bool {
+        self.control == pid
     }
 
     /// Update the display and render to the screen
@@ -211,7 +263,7 @@ fn register_callbacks(window: &Window) {
             Closure::<dyn Fn(KeyboardEvent)>::new(|event: KeyboardEvent| loop {
                 event.prevent_default();
 
-                let Some(mut display) = Display::get() else {
+                let Some(mut display) = Display::get_writer() else {
                     continue;
                 };
                 display.keybuffer = KeyBuffer {

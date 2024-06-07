@@ -38,7 +38,8 @@ pub fn spawn_thread(pid: Uuid, ctx: Arc<ProcessCtx>, f_ptr: u32) {
     let mut options = WorkerOptions::new();
     options.type_(WorkerType::Module);
 
-    let worker = Worker::new_with_options(&get_worker_script_thread(), &options)
+    let script = get_worker_script_thread();
+    let worker = Worker::new_with_options(&script, &options)
         .map_err(|e| anyhow::anyhow!("Failed to create worker: {:?}", e))
         .unwrap();
     let msg = web_sys::js_sys::Array::new();
@@ -54,7 +55,7 @@ pub fn spawn_thread(pid: Uuid, ctx: Arc<ProcessCtx>, f_ptr: u32) {
     // The memory
     msg.push(&ctx.memory().inner());
     // The function pointer
-    msg.push(&JsValue::from(f_ptr as u32));
+    msg.push(&JsValue::from(f_ptr));
 
     worker
         .post_message(&msg)

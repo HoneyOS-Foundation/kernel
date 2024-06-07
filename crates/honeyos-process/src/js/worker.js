@@ -7,32 +7,14 @@ self.onmessage = event => {
         console.error("Failed to initialize module: " + err);
         throw err;
     }).then(async () => {
-        let instance = await create_thread_instance(pid, module, memory);
-
-        // Find a table in exports
-        let table = undefined;
-        for (const key in instance.exports) {
-            const value = instance.exports[key];
-            if (value.toString() === '[object WebAssembly.Table]') {
-                table = value;
-            }
-        }
-
-        // Fail if no table exported
-        if (table === undefined) {
-            console.error("Wasm binary must export table for multithreading support.");
+        try {
+            let instance = await create_thread_instance(pid, module, memory);
+            instance.exports._thread_entrypoint(f_ptr);
             close();
-            return;
         }
-
-        // Make sure the function pointer is valid
-        if (table.length < f_ptr) {
-            console.error("The function pointer `" + f_ptr + "` is invalid");
+        catch (e) {
+            console.error(e);
             close();
-            return;
         }
-        const function_ptr = table.get(f_ptr);
-        function_ptr();
-        close();
     })
 }
