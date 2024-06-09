@@ -10,7 +10,7 @@ pub mod process;
 pub mod thread;
 pub mod time;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use honeyos_process::{
     api::{ApiModuleBuilder, ProcessCtx},
@@ -101,6 +101,7 @@ fn register_stdout_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
         })
         .into_js_value(),
     );
+
     // stdout_clear_line
     let ctx_f = ctx.clone();
     builder.register(
@@ -113,6 +114,21 @@ fn register_stdout_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
         })
         .into_js_value(),
     );
+
+    // Clear N number of lines in the processes's stdout.
+    // Will only clear up to the amount of lines.
+    let ctx_f = ctx.clone();
+    builder.register(
+        "hapi_stdout_clear_lines",
+        Closure::<dyn Fn(u32)>::new(move |num| loop {
+            if let Ok(mut stdout) = ctx_f.stdout().try_lock() {
+                stdout.push(StdoutMessage::ClearLines(num));
+                break;
+            }
+        })
+        .into_js_value(),
+    );
+
     // stdout_write
     let ctx_f = ctx.clone();
     builder.register(

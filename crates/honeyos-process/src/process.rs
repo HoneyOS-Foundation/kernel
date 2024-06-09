@@ -163,12 +163,8 @@ pub async fn create_thread_instance(
     // TODO: Refactor this to not need to recompile the wasm each time.
     // Do this by utilizing `WebAssembly::Module``
 
-    log::info!("Creating thread insatnace");
-
     let pid = Uuid::parse_str(&pid).unwrap();
     let process_manager = ProcessManager::blocking_get();
-
-    log::info!("Creating thread insatnace");
 
     let handle = process_manager.process(pid).expect("Invalid pid");
     let stdout = handle.stdout().process_buffer();

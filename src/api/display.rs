@@ -90,6 +90,7 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
             let mut process_manager = ProcessManager::blocking_get();
             let process = process_manager.process_mut(ctx_f.pid()).unwrap();
             let stdout = process.stdout_mut();
+
             // Sync stdout
             stdout.sync();
 
