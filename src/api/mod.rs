@@ -10,7 +10,7 @@ pub mod process;
 pub mod thread;
 pub mod time;
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use honeyos_process::{
     api::{ApiModuleBuilder, ProcessCtx},
