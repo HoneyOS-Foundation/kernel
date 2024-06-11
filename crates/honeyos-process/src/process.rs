@@ -1,18 +1,22 @@
 use anyhow::anyhow;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex, MutexGuard, RwLock,
+    Arc, Mutex, RwLock,
 };
 use uuid::Uuid;
-use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
+use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::js_sys::{Function, Reflect, WebAssembly, JSON};
+use web_sys::{
+    js_sys::{Function, Reflect, WebAssembly, JSON},
+    Blob, Url, Worker, WorkerOptions, WorkerType,
+};
 
 use crate::{
-    api::{ApiBuilderFn, ProcessCtx},
+    context::{ApiBuilderFn, ProcessCtx},
     memory::Memory,
     requirements::WasmRequirements,
     stdout::ProcessStdOut,
+    thread::ThreadPool,
     ProcessManager,
 };
 
@@ -24,18 +28,16 @@ pub struct Process {
     title: String,
     // The current working directory for the process
     cwd: Arc<RwLock<String>>,
-
-    // Flag for if the process is still running
-    running: Arc<AtomicBool>,
-
+    // The process context
+    ctx: Arc<ProcessCtx>,
+    // The worker for the process
+    worker: Option<Worker>,
+    // Flag for if the process is alive
+    alive: Arc<AtomicBool>,
+    // The threadpool
+    thread_pool: ThreadPool,
     // The stdout
     stdout: ProcessStdOut,
-
-    // The module binary
-    bin: Arc<Vec<u8>>,
-
-    // The api builder fn
-    api_builder: ApiBuilderFn,
 }
 
 impl Process {
@@ -47,31 +49,90 @@ impl Process {
         working_directory: &str,
         api_builder: ApiBuilderFn,
     ) -> anyhow::Result<Self> {
+        let title = title.to_string();
         // The running flag
-        let running = Arc::new(AtomicBool::new(false));
+        let alive = Arc::new(AtomicBool::new(true));
         // The stdout
         let stdout = ProcessStdOut::new();
         // The current working directory
         let cwd = Arc::new(RwLock::new(working_directory.to_string()));
-        // Clone the module
-        let module = Arc::new(wasm_bin);
+        // Create the process context
+        let ctx = create_context(id, &wasm_bin, &stdout, cwd.clone(), api_builder)?;
+        // Create the thread pool
+        let thread_pool = ThreadPool::new(id);
 
         Ok(Self {
             id,
-            title: title.to_string(),
-            running,
+            title,
+            alive,
             stdout,
-            cwd: cwd.clone(),
-            bin: module,
-            api_builder,
+            cwd,
+            ctx,
+            thread_pool,
+            worker: None,
         })
     }
 
     /// Spawn the process
-    pub fn spawn(&self) -> anyhow::Result<()> {
-        crate::thread::spawn_process(self.id, &self.bin)?;
-        self.running.store(true, Ordering::Release);
+    pub fn spawn(&mut self) -> anyhow::Result<()> {
+        let mut options = WorkerOptions::new();
+        options.type_(WorkerType::Module);
+
+        let worker = Worker::new_with_options(&get_worker_script(), &options)
+            .map_err(|e| anyhow::anyhow!("Failed to create worker: {:?}", e))?;
+        let msg = web_sys::js_sys::Array::new();
+
+        // Send the pid
+        msg.push(&self.id.to_string().into());
+        // Send the kernel module
+        msg.push(&wasm_bindgen::module());
+        // Send the kernel memory
+        msg.push(&wasm_bindgen::memory());
+        // Send the process memory
+        msg.push(self.ctx().memory().inner());
+
+        worker
+            .post_message(&msg)
+            .map_err(|e| anyhow::anyhow!("Failed to send message to worker: {:?}", e))?;
+
+        // Set callbacks
+        let alive_callback = self.alive.clone();
+        let onmessage_callback =
+            Closure::wrap(
+                Box::new(move || alive_callback.store(false, Ordering::Relaxed))
+                    as Box<dyn FnMut()>,
+            );
+        let alive_callback = self.alive.clone();
+        let onerror_callback =
+            Closure::wrap(
+                Box::new(move || alive_callback.store(false, Ordering::Relaxed))
+                    as Box<dyn FnMut()>,
+            );
+        worker.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
+        worker.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
+
+        self.worker = Some(worker);
+        self.alive.store(true, Ordering::Release);
+
+        onmessage_callback.forget();
+        onerror_callback.forget();
+
         Ok(())
+    }
+
+    /// Spawn a thread and return it's id
+    pub fn spawn_thread(&mut self, f_ptr: u32) -> anyhow::Result<u32> {
+        let id = self.thread_pool.spawn(f_ptr, self.ctx().memory().inner())?;
+        Ok(id)
+    }
+
+    /// Kill the process
+    pub fn kill(&mut self) {
+        self.thread_pool.kill_all(); // Kill all threads
+        if let Some(worker) = self.worker.as_mut() {
+            worker.terminate();
+        }
+        self.alive.store(false, Ordering::Relaxed);
     }
 
     /// Get the id
@@ -84,9 +145,14 @@ impl Process {
         &self.title
     }
 
+    /// Get the context
+    pub fn ctx(&self) -> Arc<ProcessCtx> {
+        self.ctx.clone()
+    }
+
     /// Check if the process is still running
-    pub fn is_running(&self) -> bool {
-        self.running.load(Ordering::Relaxed)
+    pub fn is_alive(&self) -> bool {
+        self.alive.load(Ordering::Relaxed)
     }
 
     /// Get the stdout
@@ -103,23 +169,41 @@ impl Process {
     pub fn cwd(&self) -> String {
         self.cwd.read().unwrap().clone()
     }
-
-    /// Kill the process
-    pub fn kill(&self) {
-        self.running.store(true, Ordering::Relaxed);
-    }
 }
 
 /// Create the instance in the worker
 #[wasm_bindgen]
-pub async fn create_instance(pid: String, bin: &[u8]) -> WebAssembly::Instance {
+pub async fn create_instance(
+    pid: String,
+    memory: WebAssembly::Memory,
+    table: &WebAssembly::Table,
+) -> WebAssembly::Instance {
     let pid = Uuid::parse_str(&pid).unwrap();
     let process_manager = ProcessManager::blocking_get();
+    let process = process_manager.process(pid).unwrap();
 
-    let handle = process_manager.process(pid).expect("Invalid pid");
-    let stdout = handle.stdout().process_buffer();
-    let cwd = handle.cwd.clone();
+    let ctx = process.ctx();
+    let ctx = Arc::new(ctx.new_worker(memory)); // A bit nasty (just a bit)
 
+    let environment = setup_environment(&ctx.memory().inner(), &table)
+        .map_err(|e| log::error!("Failed to create environment: {}", e))
+        .unwrap();
+    let api_module = ctx.build_api();
+    let imports = setup_imports(environment, &api_module)
+        .map_err(|e| log::error!("Failed to setup imports: {}", e))
+        .unwrap();
+
+    init_binary(&ctx.module(), imports).await
+}
+
+/// Create the context
+fn create_context(
+    pid: Uuid,
+    bin: &[u8],
+    stdout: &ProcessStdOut,
+    cwd: Arc<RwLock<String>>,
+    api_builder: ApiBuilderFn,
+) -> anyhow::Result<Arc<ProcessCtx>> {
     // Parse the wasm
     let requirements = WasmRequirements::parse(&bin).unwrap();
 
@@ -130,90 +214,43 @@ pub async fn create_instance(pid: String, bin: &[u8]) -> WebAssembly::Instance {
             requirements.maximum_memory,
             requirements.shared_memory,
         )
-        .expect("Failed to init binaries memory"),
+        .expect("Failed to initialize instance's memory"),
     ));
-
-    let table = Arc::new(setup_table().unwrap());
-    let bin = Arc::new(bin.to_vec());
-
-    let ctx: Arc<ProcessCtx> = Arc::new(ProcessCtx::new(
-        pid,
-        memory.clone(),
-        table.clone(),
-        stdout,
-        cwd,
-        bin.clone(),
-        handle.api_builder,
-    ));
-
-    let environment = setup_environment(&ctx.memory(), &ctx.table()).unwrap();
-    let api_module = ctx.build_api();
-    let imports = setup_imports(environment, &api_module).unwrap();
-
-    init_binary(&*bin, imports).await
-}
-
-/// Create a new instance in order to run on a seperate thread
-#[wasm_bindgen]
-pub async fn create_thread_instance(
-    pid: String,
-    bin: &[u8],
-    memory: WebAssembly::Memory,
-) -> WebAssembly::Instance {
-    // TODO: Refactor this to not need to recompile the wasm each time.
-    // Do this by utilizing `WebAssembly::Module``
-
-    let pid = Uuid::parse_str(&pid).unwrap();
-    let process_manager = ProcessManager::blocking_get();
-
-    let handle = process_manager.process(pid).expect("Invalid pid");
-    let stdout = handle.stdout().process_buffer();
-    let cwd = handle.cwd.clone();
-
-    // Create the memory
-    let memory: Arc<Mutex<Memory>> = Arc::new(Mutex::new(Memory::from_inner(memory)));
-    let table = Arc::new(setup_table().unwrap());
 
     let bin = Arc::new(bin.to_vec());
 
-    let ctx: Arc<ProcessCtx> = Arc::new(ProcessCtx::new(
+    let stdout = stdout.process_buffer();
+    Ok(Arc::new(ProcessCtx::new(
         pid,
         memory.clone(),
-        table.clone(),
         stdout,
         cwd,
         bin.clone(),
-        handle.api_builder,
-    ));
-
-    let environment = setup_environment(&ctx.memory(), &ctx.table()).unwrap();
-    let api_module = ctx.build_api();
-    let imports = setup_imports(environment, &api_module).unwrap();
-
-    init_binary(&*bin, imports).await
+        api_builder,
+    )))
 }
 
-/// Setup table
-fn setup_table() -> anyhow::Result<WebAssembly::Table> {
-    const INITIAL: u32 = 4;
-    const ELEMENT: &str = "anyfunc";
+// /// Setup table
+// fn setup_table() -> anyhow::Result<WebAssembly::Table> {
+//     const INITIAL: u32 = 4;
+//     const ELEMENT: &str = "anyfunc";
 
-    let table_desc = JSON::parse("{}").unwrap();
-    Reflect::set(&table_desc, &"initial".into(), &INITIAL.into())
-        .map_err(|e| anyhow!("Failed to setup table: {:?}", e))?;
-    Reflect::set(&table_desc, &"element".into(), &ELEMENT.into())
-        .map_err(|e| anyhow!("Failed to setup table: {:?}", e))?;
-    WebAssembly::Table::new(&table_desc.unchecked_into())
-        .map_err(|e| anyhow!("Failed to setup table: {:?}", e))
-}
+//     let table_desc = JSON::parse("{}").unwrap();
+//     Reflect::set(&table_desc, &"initial".into(), &INITIAL.into())
+//         .map_err(|e| anyhow!("Failed to setup table: {:?}", e))?;
+//     Reflect::set(&table_desc, &"element".into(), &ELEMENT.into())
+//         .map_err(|e| anyhow!("Failed to setup table: {:?}", e))?;
+//     WebAssembly::Table::new(&table_desc.unchecked_into())
+//         .map_err(|e| anyhow!("Failed to setup table: {:?}", e))
+// }
 
 /// Setup the env
 pub fn setup_environment(
-    memory: &MutexGuard<Memory>,
+    memory: &WebAssembly::Memory,
     table: &WebAssembly::Table,
 ) -> anyhow::Result<JsValue> {
     let env = JSON::parse("{}").unwrap();
-    Reflect::set(&env, &"memory".into(), memory.inner())
+    Reflect::set(&env, &"memory".into(), memory)
         .map_err(|e| anyhow!("Failed to setup env: {:?}", e))?;
     Reflect::set(&env, &"table".into(), &table)
         .map_err(|e| anyhow!("Failed to setup env: {:?}", e))?;
@@ -349,10 +386,62 @@ fn setup_emscripten_imports(imports_object: &JsValue) -> anyhow::Result<()> {
 pub async fn init_binary(bin: &[u8], imports: JsValue) -> WebAssembly::Instance {
     let promise = WebAssembly::instantiate_buffer(bin, &imports.unchecked_into());
     let promise = JsFuture::from(promise);
-    let instance = promise.await.unwrap();
+    let instance = promise
+        .await
+        .map_err(|e| {
+            log::error!("Failed to create instance: {:?}", e);
+        })
+        .unwrap();
 
     Reflect::get(&instance, &"instance".into())
         .unwrap()
         .dyn_into()
         .unwrap()
+}
+
+/// Generate the worker script encoded blob url. (Cached for performance)
+fn get_worker_script() -> String {
+    static CACHED_SCRIPT: Mutex<Option<String>> = Mutex::new(None);
+
+    let cached: Option<String>;
+    loop {
+        if let Ok(url) = CACHED_SCRIPT.try_lock() {
+            cached = url.clone();
+            break;
+        }
+    }
+
+    if let Some(url) = cached {
+        return url;
+    }
+
+    // Aquire the script path by generating a stack trace and parsing the path from it.
+    let wasm_shim_url = web_sys::js_sys::eval(include_str!("js/script_path.js"))
+        .unwrap()
+        .as_string()
+        .unwrap();
+
+    let template = include_str!("js/worker_executable.js");
+    let script = template.replace("BINDGEN_SHIM_URL", &wasm_shim_url);
+
+    // Create url encoded blob
+    let arr = web_sys::js_sys::Array::new();
+    arr.set(0, JsValue::from_str(&script));
+    let blob = Blob::new_with_str_sequence(&arr).unwrap();
+    let url = Url::create_object_url_with_blob(
+        &blob
+            .slice_with_f64_and_f64_and_content_type(0.0, blob.size(), "text/javascript")
+            .unwrap(),
+    )
+    .unwrap();
+
+    // Cache the url
+    loop {
+        if let Ok(mut cached) = CACHED_SCRIPT.try_lock() {
+            *cached = Some(url.clone());
+            break;
+        }
+    }
+
+    url
 }

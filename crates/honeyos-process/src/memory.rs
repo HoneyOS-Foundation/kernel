@@ -48,7 +48,7 @@ impl MemoryRegion {
 }
 
 /// The sandboxed memory of a process
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Memory {
     maximum: Option<u32>,
     inner: WebAssembly::Memory,
@@ -75,19 +75,11 @@ impl Memory {
         })
     }
 
-    /// Create from a pre-existing inner.
-    pub fn from_inner(inner: WebAssembly::Memory) -> Self {
-        // ### NOTE (GetAGripGal)
-        // This does not copy the memory regions or maximum memory.
-        // This allows for threads to expand past the specified maximum.
-        // This also makes it that threads cannot use freed memory and must grow the memory.
-        // This is a disaster and needs to be fixed soon!
-        // TODO: Fix the memory regions and maximum memory for threads
-        Self {
-            inner,
-            maximum: None,
-            regions: Vec::new(),
-        }
+    /// Create a new memory instance with new inner
+    pub fn new_inner(&self, inner: WebAssembly::Memory) -> Self {
+        let mut clone = self.clone();
+        clone.inner = inner;
+        clone
     }
 
     /// Read from a certain block of memory

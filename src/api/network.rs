@@ -4,7 +4,7 @@ use honeyos_networking::{
     request::{RequestMethod, RequestMode, RequestStatus},
     NetworkingManager,
 };
-use honeyos_process::api::{ApiModuleBuilder, ProcessCtx};
+use honeyos_process::context::{ApiModuleBuilder, ProcessCtx};
 use uuid::Uuid;
 use wasm_bindgen::closure::Closure;
 

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use honeyos_display::{error::Error, Display, KeyBuffer};
 use honeyos_process::{
-    api::{ApiModuleBuilder, ProcessCtx},
+    context::{ApiModuleBuilder, ProcessCtx},
     ProcessManager,
 };
 use wasm_bindgen::closure::Closure;
@@ -23,6 +23,29 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 return -1;
             }
             return 0;
+        })
+        .into_js_value(),
+    );
+
+    // hapi_display_loosen_control
+    // Loosen the control over display.
+    // In this state, the process still controls the display, but allows other processes to take it over without override.
+    // ### Returns
+    // - `0` On success
+    // - `-1` If the process doesn't have control over the display
+    // - `-2` If the display control is already loose
+    let ctx_f = ctx.clone();
+    builder.register(
+        "hapi_display_loosen_control",
+        Closure::<dyn Fn() -> i32>::new(move || {
+            let mut display = Display::blocking_get_writer();
+            if !display.has_control(ctx_f.pid()) {
+                return -1;
+            }
+            match display.loosen_control() {
+                Err(_) => -2,
+                Ok(_) => 0,
+            }
         })
         .into_js_value(),
     );

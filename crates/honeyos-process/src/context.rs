@@ -11,12 +11,12 @@ use crate::{memory::Memory, stdout::StdoutMessage};
 pub type ApiBuilderFn = fn(Arc<ProcessCtx>, &mut ApiModuleBuilder);
 
 /// The context for the process
+#[derive(Debug, Clone)]
 #[wasm_bindgen]
 pub struct ProcessCtx {
     pid: Uuid,
     stdout: Arc<Mutex<Vec<StdoutMessage>>>,
     memory: Arc<Mutex<Memory>>,
-    table: Arc<WebAssembly::Table>,
     cwd: Arc<RwLock<String>>,
     module: Arc<Vec<u8>>,
     api_builder: ApiBuilderFn,
@@ -26,7 +26,6 @@ impl ProcessCtx {
     pub fn new(
         pid: Uuid,
         memory: Arc<Mutex<Memory>>,
-        table: Arc<WebAssembly::Table>,
         stdout: Arc<Mutex<Vec<StdoutMessage>>>,
         cwd: Arc<RwLock<String>>,
         module: Arc<Vec<u8>>,
@@ -35,7 +34,6 @@ impl ProcessCtx {
         Self {
             pid,
             memory,
-            table,
             stdout,
             cwd,
             module,
@@ -65,11 +63,6 @@ impl ProcessCtx {
         }
     }
 
-    /// Get the table
-    pub fn table(&self) -> Arc<WebAssembly::Table> {
-        self.table.clone()
-    }
-
     /// Get the stdout messenger of the wasm module
     pub fn stdout(&self) -> Arc<Mutex<Vec<StdoutMessage>>> {
         self.stdout.clone()
@@ -94,6 +87,19 @@ impl ProcessCtx {
             };
             *writer = wd.clone();
             return;
+        }
+    }
+
+    /// Create a new copy for this worker
+    pub fn new_worker(&self, memory_inner: WebAssembly::Memory) -> Self {
+        loop {
+            let Ok(memory) = self.memory.try_lock() else {
+                continue;
+            };
+            let new_memory = Arc::new(Mutex::new(memory.new_inner(memory_inner)));
+            let mut clone = self.clone();
+            clone.memory = new_memory;
+            return clone;
         }
     }
 }

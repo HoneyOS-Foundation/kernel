@@ -1,7 +1,7 @@
 use std::{ffi::CString, str::FromStr, sync::Arc};
 
 use honeyos_process::{
-    api::{ApiModuleBuilder, ProcessCtx},
+    context::{ApiModuleBuilder, ProcessCtx},
     ProcessManager,
 };
 use uuid::Uuid;
@@ -204,7 +204,7 @@ pub fn register_process_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 return 0;
             };
 
-            process.is_running().into()
+            process.is_alive().into()
         })
         .into_js_value(),
     );

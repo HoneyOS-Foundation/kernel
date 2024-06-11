@@ -13,9 +13,19 @@ static mut DISPLAY: Option<Arc<RwLock<Display>>> = None;
 
 /// The display mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DisplayMode {
+pub enum Mode {
     Text,
     FrameBuffer,
+}
+
+/// The control over the display
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Control {
+    None,
+    /// Strict control. The display can only be taken over properly when the current process releases it.
+    Strict(Uuid),
+    /// Loose control. The display is being controlled, but processes can still take it over properly.
+    Loose(Uuid),
 }
 
 /// The keybuffer registered to the display
@@ -32,8 +42,8 @@ pub struct KeyBuffer {
 pub struct Display {
     root: Option<HtmlElement>,
     text: String,
-    control: Uuid,
-    pub mode: DisplayMode,
+    control: Control,
+    pub mode: Mode,
     pub keybuffer: KeyBuffer,
     pub updated: bool,
 }
@@ -101,8 +111,8 @@ impl Display {
                         shift: false,
                         ctrl: false,
                     },
-                    mode: DisplayMode::Text,
-                    control: Uuid::nil(),
+                    mode: Mode::Text,
+                    control: Control::None,
                     updated: false,
                 })))
             }
@@ -117,27 +127,42 @@ impl Display {
 
     /// Attempt to change the process in control
     pub fn assume_control(&mut self, pid: Uuid) -> Result<(), Error> {
-        if !self.control.is_nil() {
+        if let Control::Strict(_) = self.control {
             return Err(Error::DisplayOccupied);
         }
-        self.control = pid;
+        self.control = Control::Strict(pid);
         Ok(())
+    }
+
+    /// Loosen control over the display
+    pub fn loosen_control(&mut self) -> Result<(), Error> {
+        match self.control {
+            Control::None => Err(Error::CannotLoosen),
+            Control::Loose(_) => Err(Error::AlreadyLoose),
+            Control::Strict(pid) => {
+                self.control = Control::Loose(pid);
+                Ok(())
+            }
+        }
     }
 
     /// Override control of the current process
     pub fn override_control(&mut self, pid: Uuid) {
         // For when the situation is dire
-        self.control = pid;
+        self.control = Control::Strict(pid);
     }
 
     /// Release the control from the display
     pub fn release_control(&mut self) {
-        self.control = Uuid::nil();
+        self.control = Control::None
     }
 
     /// Check if a process has control
     pub fn has_control(&self, pid: Uuid) -> bool {
-        self.control == pid
+        match self.control {
+            Control::None => false,
+            Control::Strict(current) | Control::Loose(current) => current == pid,
+        }
     }
 
     /// Update the display and render to the screen
@@ -153,13 +178,13 @@ impl Display {
             .expect("Display server not yet initialized!");
 
         match self.mode {
-            DisplayMode::Text => {
+            Mode::Text => {
                 let sanitized = html_escape(&self.text);
                 let colored = text_to_terminal(&sanitized);
 
                 root.set_inner_html(&colored);
             }
-            DisplayMode::FrameBuffer => unimplemented!("Only text mode is currently supported"),
+            Mode::FrameBuffer => unimplemented!("Only text mode is currently supported"),
         }
     }
 }

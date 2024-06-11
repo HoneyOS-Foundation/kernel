@@ -34,7 +34,7 @@ async fn main() {
 fn execution_loop(_time_stamp: f64) -> anyhow::Result<()> {
     let window = get_window()?;
 
-    handle_spawn_requests();
+    update_process_manager();
     update_network_manager();
     render_display_server();
 
@@ -49,16 +49,9 @@ fn execution_loop(_time_stamp: f64) -> anyhow::Result<()> {
 }
 
 /// Handle the spawn requests
-fn handle_spawn_requests() {
+fn update_process_manager() {
     if let Some(mut process_manager) = ProcessManager::get() {
-        for request in process_manager.requests() {
-            if let Some(process) = process_manager.process(*request) {
-                if let Err(e) = process.spawn() {
-                    log::error!("Failed to spawn process: {}", e);
-                }
-            }
-        }
-        process_manager.requests_mut().clear();
+        process_manager.update();
     }
 }
 

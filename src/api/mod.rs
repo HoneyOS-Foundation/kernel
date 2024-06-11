@@ -13,7 +13,7 @@ pub mod time;
 use std::sync::Arc;
 
 use honeyos_process::{
-    api::{ApiModuleBuilder, ProcessCtx},
+    context::{ApiModuleBuilder, ProcessCtx},
     stdout::StdoutMessage,
 };
 use wasm_bindgen::closure::Closure;

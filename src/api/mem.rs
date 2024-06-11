@@ -1,6 +1,6 @@
 use std::{os::raw::c_void, sync::Arc};
 
-use honeyos_process::api::{ApiModuleBuilder, ProcessCtx};
+use honeyos_process::context::{ApiModuleBuilder, ProcessCtx};
 use wasm_bindgen::closure::Closure;
 
 /// Register the memory api

@@ -1,7 +1,7 @@
 use std::{ffi::CString, str::FromStr, sync::Arc};
 
 use honeyos_fs::{ramfs::RamFsHandler, FsLabel, FsManager};
-use honeyos_process::api::{ApiModuleBuilder, ProcessCtx};
+use honeyos_process::context::{ApiModuleBuilder, ProcessCtx};
 use uuid::Uuid;
 use wasm_bindgen::closure::Closure;
 

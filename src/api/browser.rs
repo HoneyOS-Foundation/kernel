@@ -1,6 +1,6 @@
 use std::{ffi::CString, sync::Arc};
 
-use honeyos_process::api::{ApiModuleBuilder, ProcessCtx};
+use honeyos_process::context::{ApiModuleBuilder, ProcessCtx};
 use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen};
 
 /// Gets returned to describe a file

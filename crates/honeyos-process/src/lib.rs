@@ -2,15 +2,16 @@
 
 use std::sync::{Arc, Mutex, MutexGuard, Once};
 
-use api::ApiBuilderFn;
+use context::ApiBuilderFn;
 use hashbrown::{
     hash_map::{Values, ValuesMut},
     HashMap,
 };
 use process::Process;
+use thread::ThreadRequest;
 use uuid::Uuid;
 
-pub mod api;
+pub mod context;
 pub mod memory;
 pub mod process;
 pub mod requirements;
@@ -23,7 +24,8 @@ static mut PROCESS_MANAGER: Option<Arc<Mutex<ProcessManager>>> = None;
 pub struct ProcessManager {
     api_builder: ApiBuilderFn,
     processes: HashMap<Uuid, Process>,
-    spawn_requests: Vec<Uuid>, // Spawns are handled by the kernel
+    spawn_requests: Vec<Uuid>,           // Spawns are handled by the kernel
+    thread_requests: Vec<ThreadRequest>, // Thread spawn requests are also handled by the kernel as chrome does not support nested web workers
 }
 
 impl ProcessManager {
@@ -36,6 +38,7 @@ impl ProcessManager {
                 api_builder,
                 processes: HashMap::new(),
                 spawn_requests: Vec::new(),
+                thread_requests: Vec::new(),
             })));
         });
     }
@@ -88,17 +91,45 @@ impl ProcessManager {
         Ok(id)
     }
 
+    /// Spawn a thread for a process
+    pub fn spawn_thread(&mut self, pid: Uuid, fptr: u32) {
+        self.thread_requests.push(ThreadRequest { pid, fptr });
+    }
+
     /// Check for the status of each process and remove those no longer running
     pub fn update(&mut self) {
-        let mut closed = Vec::new();
+        // Remove dead processes
+        let mut dead = Vec::new();
         for (id, process) in self.processes.iter_mut() {
-            if !process.is_running() {
-                closed.push(*id);
+            if !process.is_alive() {
+                dead.push(*id);
             }
         }
-        for id in closed {
+        for id in dead {
             self.processes.remove(&id);
         }
+
+        // Handle spawn requests
+        for request in self.spawn_requests.iter() {
+            let process = self.processes.get_mut(request).unwrap();
+            process.spawn().unwrap();
+        }
+        self.spawn_requests.clear();
+
+        // Handle thread requests
+        for request in self.thread_requests.iter() {
+            let Some(process) = self.processes.get_mut(&request.pid) else {
+                continue;
+            };
+            if let Err(e) = process.spawn_thread(request.fptr) {
+                log::error!(
+                    "Failed to spawn thread for process `{}`: {}",
+                    request.pid,
+                    e
+                );
+            }
+        }
+        self.thread_requests.clear();
     }
 }
 
