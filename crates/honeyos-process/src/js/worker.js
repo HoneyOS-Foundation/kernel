@@ -1,10 +1,10 @@
-import init, {create_instance} from "BINDGEN_SHIM_URL";
+import __init, * as __kernel from "BINDGEN_SHIM_URL";
 
 self.onmessage = event => {
-    self.onmessage = null; // Prevent eval from reading onmessage
+    self.onmessage = undefined; // Prevent eval from reading onmessage
     const [pid, kernel, kernel_memory, memory, f_ptr] = event.data;
 
-    init(kernel, kernel_memory).catch(err => {
+    __init(kernel, kernel_memory).catch(err => {
         console.error("Failed to initialize module: " + err);
         throw err;
     }).then(async () => {
@@ -13,7 +13,7 @@ self.onmessage = event => {
                 initial: 4,
                 element: "anyfunc"
             });
-            let instance = await create_instance(pid, memory, table);
+            let instance = await __kernel.create_instance(pid, memory, table);
             instance.exports._thread_entrypoint(f_ptr);
             postMessage({}); // Tell the kernel the process is dead
             close();

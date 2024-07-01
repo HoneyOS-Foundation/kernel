@@ -1,5 +1,6 @@
 use std::{ffi::CString, str::FromStr, sync::Arc};
 
+use honeyos_atomics::rwlock::SpinRwLock;
 use honeyos_networking::{
     request::{RequestMethod, RequestMode, RequestStatus},
     NetworkingManager,
@@ -11,20 +12,6 @@ use wasm_bindgen::closure::Closure;
 /// Register the network api
 pub fn register_network_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     // hapi_network_request
-    // Create a network request and return it's id.
-    // ### Returns:
-    // - The id of the request on sucess
-    // - NULL if the request method was invalid, or when failed to parse headers as json.
-    // ### Methods:
-    // - Get = 0
-    // - Head = 1
-    // - Post = 2
-    // - Put = 3
-    // - Delete = 4
-    // - Connect = 5
-    // - Options = 6
-    // - Trace = 7
-    // - Patch = 8
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_network_request",
@@ -45,8 +32,9 @@ pub fn register_network_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 };
 
                 // Setup request
-                let mut network_manager = NetworkingManager::blocking_get_writer();
-                let id = network_manager.request(url, method, RequestMode::Cors, headers);
+                let networking_manager_lock = NetworkingManager::get();
+                let mut networking_manager = networking_manager_lock.spin_write().unwrap();
+                let id = networking_manager.request(url, method, RequestMode::Cors, headers);
 
                 // Write id to memory
                 let id = id.to_string();
@@ -63,20 +51,6 @@ pub fn register_network_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     );
 
     // hapi_network_request_local
-    // Create a network request to the local server and return it's id.
-    // ### Returns:
-    // - The id of the request on sucess
-    // - NULL if the request method was invalid, or when failed to parse headers as json.
-    // ### Methods:
-    // - Get = 0
-    // - Head = 1
-    // - Post = 2
-    // - Put = 3
-    // - Delete = 4
-    // - Connect = 5
-    // - Options = 6
-    // - Trace = 7
-    // - Patch = 8
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_network_request_local",
@@ -97,8 +71,9 @@ pub fn register_network_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 };
 
                 // Setup request
-                let mut network_manager = NetworkingManager::blocking_get_writer();
-                let id = network_manager.request(url, method, RequestMode::SameOrigin, headers);
+                let networking_manager_lock = NetworkingManager::get();
+                let mut networking_manager = networking_manager_lock.spin_write().unwrap();
+                let id = networking_manager.request(url, method, RequestMode::SameOrigin, headers);
 
                 // Write id to memory
                 let id = id.to_string();
@@ -115,13 +90,6 @@ pub fn register_network_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     );
 
     // hapi_network_request_status
-    // Check the status of the request
-    // ### Returns
-    // - `-1` if the request does not exists.
-    // - `0`if the request is pending.
-    // - `1`if the request succeeded.
-    // - `2`if the request failed.
-    // - `3`if the request is still pending
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_network_request_status",
@@ -135,7 +103,8 @@ pub fn register_network_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 return -1;
             };
 
-            let networking_manager = NetworkingManager::blocking_get_reader();
+            let networking_manager_lock = NetworkingManager::get();
+            let networking_manager = networking_manager_lock.spin_read().unwrap();
             let Some(status) = networking_manager.status(id) else {
                 return -1;
             };
@@ -167,7 +136,8 @@ pub fn register_network_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 return -1;
             };
 
-            let networking_manager = NetworkingManager::blocking_get_reader();
+            let networking_manager_lock = NetworkingManager::get();
+            let networking_manager = networking_manager_lock.spin_read().unwrap();
             let Some(length) = networking_manager.data_length(id) else {
                 return -1;
             };
@@ -197,7 +167,8 @@ pub fn register_network_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 return std::ptr::null();
             };
 
-            let networking_manager = NetworkingManager::blocking_get_reader();
+            let networking_manager_lock = NetworkingManager::get();
+            let networking_manager = networking_manager_lock.spin_read().unwrap();
             let Some(data) = networking_manager.data(id) else {
                 return std::ptr::null();
             };
@@ -228,7 +199,8 @@ pub fn register_network_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 return;
             };
 
-            let mut networking_manager = NetworkingManager::blocking_get_writer();
+            let networking_manager_lock = NetworkingManager::get();
+            let mut networking_manager = networking_manager_lock.spin_write().unwrap();
             networking_manager.remove(id);
         })
         .into_js_value(),

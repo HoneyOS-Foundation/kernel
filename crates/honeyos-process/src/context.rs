@@ -5,7 +5,10 @@ use uuid::Uuid;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 use web_sys::js_sys::{Reflect, WebAssembly, JSON};
 
-use crate::{memory::Memory, stdout::StdoutMessage};
+use crate::{
+    memory::Memory,
+    stdout::{ProcessStdOut, StdoutMessage},
+};
 
 /// A function responsible for building the api for wasm processes
 pub type ApiBuilderFn = fn(Arc<ProcessCtx>, &mut ApiModuleBuilder);
@@ -15,7 +18,7 @@ pub type ApiBuilderFn = fn(Arc<ProcessCtx>, &mut ApiModuleBuilder);
 #[wasm_bindgen]
 pub struct ProcessCtx {
     pid: Uuid,
-    stdout: Arc<Mutex<Vec<StdoutMessage>>>,
+    stdout: Arc<ProcessStdOut>,
     memory: Arc<Mutex<Memory>>,
     cwd: Arc<RwLock<String>>,
     module: Arc<Vec<u8>>,
@@ -26,7 +29,7 @@ impl ProcessCtx {
     pub fn new(
         pid: Uuid,
         memory: Arc<Mutex<Memory>>,
-        stdout: Arc<Mutex<Vec<StdoutMessage>>>,
+        stdout: Arc<ProcessStdOut>,
         cwd: Arc<RwLock<String>>,
         module: Arc<Vec<u8>>,
         api_builder: ApiBuilderFn,
@@ -64,7 +67,7 @@ impl ProcessCtx {
     }
 
     /// Get the stdout messenger of the wasm module
-    pub fn stdout(&self) -> Arc<Mutex<Vec<StdoutMessage>>> {
+    pub fn stdout(&self) -> Arc<ProcessStdOut> {
         self.stdout.clone()
     }
 

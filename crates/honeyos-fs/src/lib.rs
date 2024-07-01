@@ -7,6 +7,7 @@ use std::{
 use error::Error;
 use fshandler::FsHandler;
 use hashbrown::HashMap;
+use uuid::Uuid;
 
 pub mod error;
 pub mod file;
@@ -28,6 +29,13 @@ pub enum FsLabel {
     P,Q,R,S,T,
     U,V,W,X,Y,
     Z,
+}
+
+/// The result of a file lookup
+#[derive(Debug)]
+pub enum FileResult {
+    File(Uuid),
+    Directory(Uuid),
 }
 
 /// Filesystem managers
@@ -68,14 +76,38 @@ impl FsManager {
         Ok(())
     }
 
-    /// Get a file system
+    /// Get a file system.
+    /// Blocks until the fs is available.
     pub fn get_fs(&self, label: FsLabel) -> Result<Arc<RwLock<dyn FsHandler>>, Error> {
-        let handlers = self.handlers.read().map_err(|_| Error::FsManagerPoisoned)?;
+        loop {
+            let Ok(handlers) = self.handlers.try_read() else {
+                continue;
+            };
 
-        let Some(handler) = handlers.get(&label).cloned() else {
-            return Err(Error::NoFsMounted(label));
-        };
-        Ok(handler)
+            let Some(handler) = handlers.get(&label).cloned() else {
+                return Err(Error::NoFsMounted(label));
+            };
+            return Ok(handler);
+        }
+    }
+
+    /// Perform a file/directory lookup.
+    /// Blocks until the fs is available.
+    pub fn lookup(&self, path: &str) -> Result<FileResult, Error> {
+        let label = FsLabel::extract_from_path(path)?;
+        let fs = self.get_fs(label)?;
+        loop {
+            let Ok(fs) = fs.try_read() else {
+                continue;
+            };
+            if let Ok(file) = fs.get_file(path) {
+                return Ok(FileResult::File(file));
+            }
+            if let Ok(directory) = fs.get_directory(path) {
+                return Ok(FileResult::Directory(directory));
+            }
+            return Err(Error::NoSuchFileOrDirectory(path.to_string()));
+        }
     }
 }
 

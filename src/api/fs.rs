@@ -1,6 +1,6 @@
 use std::{ffi::CString, str::FromStr, sync::Arc};
 
-use honeyos_fs::{ramfs::RamFsHandler, FsLabel, FsManager};
+use honeyos_fs::{error::Error, ramfs::RamFsHandler, FileResult, FsLabel, FsManager};
 use honeyos_process::context::{ApiModuleBuilder, ProcessCtx};
 use uuid::Uuid;
 use wasm_bindgen::closure::Closure;
@@ -96,6 +96,7 @@ pub fn register_fs_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     // - `0` On success
     // - `-1` if the file does not exist or if the path is incorrect.
     // - `-2` If the fs label does not correspond to an active fs
+    // - `-3` If the path is a directory
     // ### Panics
     // Panics if the filesystem is poisoned.
     // ### Safety
@@ -106,42 +107,23 @@ pub fn register_fs_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
         "hapi_fs_file_get",
         Closure::<dyn Fn(*const u8, *mut u8) -> i32>::new(move |path, buffer| {
             let mut memory = ctx_f.memory();
-            let Some(mut path) = memory.read_str(path as u32) else {
+            let Some(path) = memory.read_str(path as u32) else {
                 return -1;
-            };
-
-            // If the path does not contain a fs label, append the dir to the current working directory
-            let label = match FsLabel::extract_from_path(&path) {
-                Ok(label) => label,
-                Err(_) => {
-                    let cwd = ctx_f.cwd();
-                    path = format!("{}/{}", cwd, path);
-                    log::info!("{}", path);
-
-                    let Ok(label) = FsLabel::extract_from_path(&path) else {
-                        return -2;
-                    };
-                    label
-                }
             };
 
             let fs_manager = FsManager::get();
-            let Ok(fs) = fs_manager.get_fs(label) else {
-                return -2;
+
+            let file_id = match fs_manager.lookup(&path) {
+                Ok(result) => match result {
+                    FileResult::File(file) => file,
+                    FileResult::Directory(_) => return -3,
+                },
+                Err(e) => match e {
+                    Error::NoFsMounted(_) => return -2,
+                    Error::NoSuchFileOrDirectory(_) => return -1,
+                    _ => return -1,
+                },
             };
-
-            let fs_reader = fs.read().expect(&format!(
-                "The lock for file system {}:/ has been poisoned",
-                label
-            ));
-
-            // Remove the label from the path
-            let path = path.split_off(3);
-
-            let Ok(file_id) = fs_reader.get_file(&path) else {
-                return -1;
-            };
-
             let file_id = CString::new(file_id.to_string()).unwrap();
             memory.write(buffer as u32, file_id.as_bytes());
             0

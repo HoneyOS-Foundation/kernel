@@ -1,4 +1,5 @@
 use anyhow::anyhow;
+use honeyos_atomics::rwlock::SpinRwLock;
 use std::sync::{Arc, Mutex, RwLock};
 
 /// A message sent to stdout
@@ -26,7 +27,7 @@ impl ProcessStdOut {
     }
 
     /// Write a string to the kernel buffer. Locks the buffer
-    pub fn write(&mut self, string: impl Into<String>) -> anyhow::Result<()> {
+    pub fn write(&self, string: impl Into<String>) -> anyhow::Result<()> {
         let string = string.into();
         let mut process_buffer = self
             .process_buffer
@@ -37,7 +38,7 @@ impl ProcessStdOut {
     }
 
     /// Write a line to the kernel buffer
-    pub fn writeln(&mut self, string: impl Into<String>) -> anyhow::Result<()> {
+    pub fn writeln(&self, string: impl Into<String>) -> anyhow::Result<()> {
         let string = string.into();
         let string = format!("{}\n", string);
         let mut process_buffer = self
@@ -49,7 +50,7 @@ impl ProcessStdOut {
     }
 
     /// Sync buffer to the local copy
-    pub fn sync(&mut self) {
+    pub fn sync(&self) {
         // Get the eventual buffer
         let mut eventual_buffer;
         loop {
@@ -108,23 +109,22 @@ impl ProcessStdOut {
     }
 
     /// Clear the local buffer
-    pub fn clear(&mut self) {
-        loop {
-            let Ok(mut eventual_buffer) = self.eventual_buffer.try_write() else {
-                continue;
-            };
-            eventual_buffer.clear();
-        }
+    pub fn clear(&self) {
+        let mut eventual_buffer = self.eventual_buffer.spin_write().unwrap();
+        eventual_buffer.clear();
+    }
+
+    /// Clear N number of lines in the processes's stdout.
+    /// Will only clear up to the amount of lines.
+    pub fn clear_lines(&self, num: u32) {
+        let mut process_buffer = self.process_buffer.lock().unwrap();
+        process_buffer.push(StdoutMessage::ClearLines(num));
     }
 
     /// Return the local buffer
     pub fn buffer(&self) -> String {
-        loop {
-            let Ok(eventual_buffer) = self.eventual_buffer.try_read() else {
-                continue;
-            };
-            return eventual_buffer.clone();
-        }
+        let eventual_buffer = self.eventual_buffer.spin_read().unwrap();
+        eventual_buffer.clone()
     }
 
     /// Return an arc reference to the process buffer

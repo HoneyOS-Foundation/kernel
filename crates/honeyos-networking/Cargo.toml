@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+honeyos-atomics = { path = "../honeyos-atomics" }
+
 hashbrown = "0.14.5"
 uuid = "1.8.0"
 wasm-bindgen-futures = "0.4.42"

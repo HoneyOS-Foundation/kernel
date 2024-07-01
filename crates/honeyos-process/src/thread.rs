@@ -2,6 +2,7 @@
 use std::sync::{Arc, Mutex};
 
 use hashbrown::HashMap;
+use honeyos_atomics::mutex::SpinMutex;
 use uuid::Uuid;
 use wasm_bindgen::{closure::Closure, prelude::JsValue, JsCast};
 use web_sys::{js_sys::WebAssembly, Blob, Url, Worker, WorkerOptions, WorkerType};
@@ -54,19 +55,14 @@ impl ThreadPool {
 
         // Register callbacks
         let threads_callback = threads.clone();
-        let onmessage_callback = Closure::wrap(Box::new(move || loop {
-            let Ok(mut threads) = threads_callback.try_lock() else {
-                continue;
-            };
+        let onmessage_callback = Closure::wrap(Box::new(move || {
+            let mut threads = threads_callback.spin_lock().unwrap();
             let thread = threads.get_mut(&id).unwrap();
             thread.alive = false;
-            break;
         }) as Box<dyn FnMut()>);
         let threads_callback = threads.clone();
         let onerror_callback = Closure::wrap(Box::new(move || loop {
-            let Ok(mut threads) = threads_callback.try_lock() else {
-                continue;
-            };
+            let mut threads = threads_callback.spin_lock().unwrap();
             let thread = threads.get_mut(&id).unwrap();
             thread.alive = false;
             break;
@@ -172,16 +168,9 @@ fn spawn_worker(
 fn generate_worker_script() -> String {
     static CACHED_SCRIPT: Mutex<Option<String>> = Mutex::new(None);
 
-    let cached: Option<String>;
-    loop {
-        if let Ok(url) = CACHED_SCRIPT.try_lock() {
-            cached = url.clone();
-            break;
-        }
-    }
-
-    if let Some(url) = cached {
-        return url;
+    let cached = CACHED_SCRIPT.spin_lock().unwrap();
+    if let Some(url) = cached.as_ref() {
+        return url.clone();
     }
 
     // Aquire the script path by generating a stack trace and parsing the path from it.
@@ -205,12 +194,8 @@ fn generate_worker_script() -> String {
     .unwrap();
 
     // Cache the url
-    loop {
-        if let Ok(mut cached) = CACHED_SCRIPT.try_lock() {
-            *cached = Some(url.clone());
-            break;
-        }
-    }
+    let mut cached = CACHED_SCRIPT.spin_lock().unwrap();
+    *cached = Some(url.clone());
 
     url
 }

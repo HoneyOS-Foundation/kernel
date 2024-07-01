@@ -17,6 +17,7 @@ pub enum Error {
         child: Uuid,
         directory: Uuid,
     },
+    NoSuchFileOrDirectory(String),
     IsFile(String),
     IsDirectory(String),
     FileAlreadyExists(String),
@@ -62,6 +63,7 @@ impl std::fmt::Display for Error {
                 "Directory {} contains no directory with id: {}",
                 directory, child
             ),
+            Self::NoSuchFileOrDirectory(s) => writeln!(f, "No such file or directory: {}", s),
             Self::IsFile(s) => writeln!(f, "{} is a file", s),
             Self::IsDirectory(s) => writeln!(f, "{} is a directory", s),
             Self::FileOrphaned(s) => writeln!(f, "File {} is orphaned", s),

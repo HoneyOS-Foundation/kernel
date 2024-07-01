@@ -4,5 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rhai = "1.18.0"
+rhai = { version = "1.18.0", default-features = false, features = [
+    "std",
+    "wasm-bindgen",
+] }
 uuid = "1.8.0"
+anyhow = "1"
+log = "0.4.21"

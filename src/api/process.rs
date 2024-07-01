@@ -1,5 +1,6 @@
 use std::{ffi::CString, str::FromStr, sync::Arc};
 
+use honeyos_atomics::mutex::SpinMutex;
 use honeyos_process::{
     context::{ApiModuleBuilder, ProcessCtx},
     ProcessManager,
@@ -92,7 +93,8 @@ pub fn register_process_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
             let mut memory = ctx_f.memory();
             let wasm_bin = memory.read(bin as u32, bin_len);
 
-            let mut process_manager = ProcessManager::blocking_get();
+            let process_manager_lock = ProcessManager::get();
+            let mut process_manager = process_manager_lock.spin_lock().unwrap();
             let cwd = ctx_f.cwd();
             let pid = match process_manager.spawn(wasm_bin, None, &cwd) {
                 Ok(pid) => pid,
@@ -135,12 +137,13 @@ pub fn register_process_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 return -1;
             };
 
-            let mut process_manager = ProcessManager::blocking_get();
+            let process_manager_lock = ProcessManager::get();
+            let mut process_manager = process_manager_lock.spin_lock().unwrap();
             let Some(process) = process_manager.process_mut(id) else {
                 return -1;
             };
 
-            let stdout = process.stdout_mut();
+            let stdout = process.stdout();
             stdout.sync();
             let buffer = stdout.buffer();
             memory.write(out_buffer as u32, &buffer.as_bytes());
@@ -169,12 +172,13 @@ pub fn register_process_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 return -1;
             };
 
-            let mut process_manager = ProcessManager::blocking_get();
+            let process_manager_lock = ProcessManager::get();
+            let mut process_manager = process_manager_lock.spin_lock().unwrap();
             let Some(process) = process_manager.process_mut(id) else {
                 return -1;
             };
 
-            let stdout = process.stdout_mut();
+            let stdout = process.stdout();
             stdout.sync();
             let buffer = stdout.buffer();
             buffer.len() as i32
@@ -199,7 +203,8 @@ pub fn register_process_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 return 0;
             };
 
-            let process_manager = ProcessManager::blocking_get();
+            let process_manager_lock = ProcessManager::get();
+            let process_manager = process_manager_lock.spin_lock().unwrap();
             let Some(process) = process_manager.process(id) else {
                 return 0;
             };

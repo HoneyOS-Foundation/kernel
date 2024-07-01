@@ -1,12 +1,11 @@
-#![feature(async_closure)]
-
-use std::sync::{Arc, Mutex, MutexGuard, Once};
+use std::sync::{Arc, Mutex, Once};
 
 use context::ApiBuilderFn;
 use hashbrown::{
     hash_map::{Values, ValuesMut},
     HashMap,
 };
+use honeyos_bhai::context::ScopeBuilderFn;
 use process::Process;
 use thread::ThreadRequest;
 use uuid::Uuid;
@@ -44,27 +43,12 @@ impl ProcessManager {
     }
 
     /// Get the static instance
-    pub fn get<'a>() -> Option<MutexGuard<'a, ProcessManager>> {
-        let pm = unsafe {
+    pub fn get() -> Arc<Mutex<ProcessManager>> {
+        unsafe {
             PROCESS_MANAGER
                 .as_ref()
                 .expect("Process manager has not been initialized")
-        };
-        pm.try_lock().ok()
-    }
-
-    /// Get the static instance.
-    /// Blocks until locked.
-    pub fn blocking_get<'a>() -> MutexGuard<'a, Self> {
-        let pm = unsafe {
-            PROCESS_MANAGER
-                .as_ref()
-                .expect("Display server not initialized")
-        };
-        loop {
-            if let Ok(pm) = pm.try_lock() {
-                return pm;
-            }
+                .clone()
         }
     }
 

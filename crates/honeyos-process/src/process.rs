@@ -1,4 +1,6 @@
 use anyhow::anyhow;
+use honeyos_atomics::mutex::SpinMutex;
+use honeyos_bhai::{context::ScopeBuilderFn, Scope};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, RwLock,
@@ -37,7 +39,7 @@ pub struct Process {
     // The threadpool
     thread_pool: ThreadPool,
     // The stdout
-    stdout: ProcessStdOut,
+    stdout: Arc<ProcessStdOut>,
 }
 
 impl Process {
@@ -53,11 +55,11 @@ impl Process {
         // The running flag
         let alive = Arc::new(AtomicBool::new(true));
         // The stdout
-        let stdout = ProcessStdOut::new();
+        let stdout = Arc::new(ProcessStdOut::new());
         // The current working directory
         let cwd = Arc::new(RwLock::new(working_directory.to_string()));
         // Create the process context
-        let ctx = create_context(id, &wasm_bin, &stdout, cwd.clone(), api_builder)?;
+        let ctx = create_context(id, &wasm_bin, stdout.clone(), cwd.clone(), api_builder)?;
         // Create the thread pool
         let thread_pool = ThreadPool::new(id);
 
@@ -156,13 +158,8 @@ impl Process {
     }
 
     /// Get the stdout
-    pub fn stdout(&self) -> &ProcessStdOut {
-        &self.stdout
-    }
-
-    /// Get the stdout
-    pub fn stdout_mut(&mut self) -> &mut ProcessStdOut {
-        &mut self.stdout
+    pub fn stdout(&self) -> Arc<ProcessStdOut> {
+        self.stdout.clone()
     }
 
     /// Get the current working directory
@@ -175,15 +172,19 @@ impl Process {
 #[wasm_bindgen]
 pub async fn create_instance(
     pid: String,
-    memory: WebAssembly::Memory,
+    memory: &WebAssembly::Memory,
     table: &WebAssembly::Table,
 ) -> WebAssembly::Instance {
     let pid = Uuid::parse_str(&pid).unwrap();
-    let process_manager = ProcessManager::blocking_get();
+    let process_manager_lock = ProcessManager::get();
+    let Ok(process_manager) = process_manager_lock.spin_lock() else {
+        panic!("Process Manager Poisoned");
+    };
+
     let process = process_manager.process(pid).unwrap();
 
     let ctx = process.ctx();
-    let ctx = Arc::new(ctx.new_worker(memory)); // A bit nasty (just a bit)
+    let ctx = Arc::new(ctx.new_worker(memory.clone()));
 
     let environment = setup_environment(&ctx.memory().inner(), &table)
         .map_err(|e| log::error!("Failed to create environment: {}", e))
@@ -200,7 +201,7 @@ pub async fn create_instance(
 fn create_context(
     pid: Uuid,
     bin: &[u8],
-    stdout: &ProcessStdOut,
+    stdout: Arc<ProcessStdOut>,
     cwd: Arc<RwLock<String>>,
     api_builder: ApiBuilderFn,
 ) -> anyhow::Result<Arc<ProcessCtx>> {
@@ -218,8 +219,6 @@ fn create_context(
     ));
 
     let bin = Arc::new(bin.to_vec());
-
-    let stdout = stdout.process_buffer();
     Ok(Arc::new(ProcessCtx::new(
         pid,
         memory.clone(),
@@ -229,20 +228,6 @@ fn create_context(
         api_builder,
     )))
 }
-
-// /// Setup table
-// fn setup_table() -> anyhow::Result<WebAssembly::Table> {
-//     const INITIAL: u32 = 4;
-//     const ELEMENT: &str = "anyfunc";
-
-//     let table_desc = JSON::parse("{}").unwrap();
-//     Reflect::set(&table_desc, &"initial".into(), &INITIAL.into())
-//         .map_err(|e| anyhow!("Failed to setup table: {:?}", e))?;
-//     Reflect::set(&table_desc, &"element".into(), &ELEMENT.into())
-//         .map_err(|e| anyhow!("Failed to setup table: {:?}", e))?;
-//     WebAssembly::Table::new(&table_desc.unchecked_into())
-//         .map_err(|e| anyhow!("Failed to setup table: {:?}", e))
-// }
 
 /// Setup the env
 pub fn setup_environment(
@@ -403,16 +388,9 @@ pub async fn init_binary(bin: &[u8], imports: JsValue) -> WebAssembly::Instance 
 fn get_worker_script() -> String {
     static CACHED_SCRIPT: Mutex<Option<String>> = Mutex::new(None);
 
-    let cached: Option<String>;
-    loop {
-        if let Ok(url) = CACHED_SCRIPT.try_lock() {
-            cached = url.clone();
-            break;
-        }
-    }
-
-    if let Some(url) = cached {
-        return url;
+    let cached = CACHED_SCRIPT.spin_lock().unwrap();
+    if let Some(url) = cached.as_ref() {
+        return url.clone();
     }
 
     // Aquire the script path by generating a stack trace and parsing the path from it.
@@ -436,12 +414,8 @@ fn get_worker_script() -> String {
     .unwrap();
 
     // Cache the url
-    loop {
-        if let Ok(mut cached) = CACHED_SCRIPT.try_lock() {
-            *cached = Some(url.clone());
-            break;
-        }
-    }
+    let mut cached = CACHED_SCRIPT.spin_lock().unwrap();
+    *cached = Some(url.clone());
 
     url
 }

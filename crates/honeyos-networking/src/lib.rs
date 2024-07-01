@@ -1,10 +1,11 @@
 pub mod error;
 pub mod request;
 
-use std::sync::{Arc, Once, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, Once, RwLock};
 
 use crate::error::Error;
 use hashbrown::HashMap;
+use honeyos_atomics::rwlock::SpinRwLock;
 use request::{Request, RequestMethod, RequestMode, RequestStatus, ScheduledRequest};
 use uuid::Uuid;
 use wasm_bindgen_futures::JsFuture;
@@ -25,53 +26,12 @@ pub struct NetworkingManager {
 }
 
 impl NetworkingManager {
-    /// Get the static instance with write access
-    pub fn get_writer<'a>() -> Option<RwLockWriteGuard<'a, Self>> {
-        let networking_manager = unsafe {
+    pub fn get() -> Arc<RwLock<NetworkingManager>> {
+        unsafe {
             NETWORKING_MANAGER
                 .as_ref()
-                .expect("Display server not initialized")
-        };
-        networking_manager.try_write().ok()
-    }
-
-    /// Get the static instance with write access
-    /// Blocks until locked.
-    pub fn blocking_get_writer<'a>() -> RwLockWriteGuard<'a, Self> {
-        let networking_manager = unsafe {
-            NETWORKING_MANAGER
-                .as_ref()
-                .expect("Display server not initialized")
-        };
-        loop {
-            if let Ok(networking_manager) = networking_manager.try_write() {
-                return networking_manager;
-            }
-        }
-    }
-
-    /// Get the static instance with read access
-    pub fn get_reader<'a>() -> Option<RwLockReadGuard<'a, Self>> {
-        let networking_manager = unsafe {
-            NETWORKING_MANAGER
-                .as_ref()
-                .expect("Display server not initialized")
-        };
-        networking_manager.try_read().ok()
-    }
-
-    /// Get the static instance with read access
-    /// Blocks until aqcuired
-    pub fn blocking_get_reader<'a>() -> RwLockReadGuard<'a, Self> {
-        let networking_manager = unsafe {
-            NETWORKING_MANAGER
-                .as_ref()
-                .expect("Display server not initialized")
-        };
-        loop {
-            if let Ok(networking_manager) = networking_manager.try_read() {
-                return networking_manager;
-            }
+                .expect("Networking manager not initialized")
+                .clone()
         }
     }
 }
@@ -176,6 +136,7 @@ impl NetworkingManager {
         let window = web_sys::window().unwrap();
         let request = web_sys::Request::new_with_str_and_init(&scheduled.url, &request_init)
             .map_err(|e| Error::RequestInitFailure(e))?;
+
         wasm_bindgen_futures::spawn_local(async move {
             JsFuture::from(
                 window
@@ -185,8 +146,12 @@ impl NetworkingManager {
                             let response: Response = response.dyn_into().unwrap();
 
                             if !response.ok() {
-                                let mut networking_manager =
-                                    NetworkingManager::blocking_get_writer();
+                                let networking_manager_lock = NetworkingManager::get();
+                                let Ok(mut networking_manager) =
+                                    networking_manager_lock.spin_write()
+                                else {
+                                    return;
+                                };
                                 let Some(request) = networking_manager.requests.get_mut(&id) else {
                                     return;
                                 };
@@ -199,7 +164,11 @@ impl NetworkingManager {
                         })
                     }))
                     .catch(&Closure::new(move |_| {
-                        let mut networking_manager = NetworkingManager::blocking_get_writer();
+                        let networking_manager_lock = NetworkingManager::get();
+                        let Ok(mut networking_manager) = networking_manager_lock.spin_write()
+                        else {
+                            return;
+                        };
                         let Some(request) = networking_manager.requests.get_mut(&id) else {
                             return;
                         };
@@ -235,7 +204,10 @@ fn read_and_update(id: Uuid, blob: Blob) {
         let mut buffer = vec![0; array.length() as usize];
         array.copy_to(&mut buffer);
 
-        let mut networking_manager = NetworkingManager::blocking_get_writer();
+        let networking_manager_lock = NetworkingManager::get();
+        let Ok(mut networking_manager) = networking_manager_lock.spin_write() else {
+            return;
+        };
         let Some(request) = networking_manager.requests.get_mut(&id) else {
             return;
         };

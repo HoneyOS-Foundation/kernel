@@ -12,10 +12,7 @@ pub mod time;
 
 use std::sync::Arc;
 
-use honeyos_process::{
-    context::{ApiModuleBuilder, ProcessCtx},
-    stdout::StdoutMessage,
-};
+use honeyos_process::context::{ApiModuleBuilder, ProcessCtx};
 use wasm_bindgen::closure::Closure;
 
 use self::{
@@ -93,11 +90,9 @@ fn register_stdout_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_stdout_clear",
-        Closure::<dyn Fn()>::new(move || loop {
-            if let Ok(mut stdout) = ctx_f.stdout().try_lock() {
-                stdout.push(StdoutMessage::Clear);
-                break;
-            }
+        Closure::<dyn Fn()>::new(move || {
+            let stdout = ctx_f.stdout();
+            stdout.clear();
         })
         .into_js_value(),
     );
@@ -106,11 +101,9 @@ fn register_stdout_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_stdout_clear_line",
-        Closure::<dyn Fn()>::new(move || loop {
-            if let Ok(mut stdout) = ctx_f.stdout().try_lock() {
-                stdout.push(StdoutMessage::ClearLine);
-                break;
-            }
+        Closure::<dyn Fn()>::new(move || {
+            let stdout = ctx_f.stdout();
+            stdout.clear_lines(1);
         })
         .into_js_value(),
     );
@@ -120,11 +113,9 @@ fn register_stdout_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_stdout_clear_lines",
-        Closure::<dyn Fn(u32)>::new(move |num| loop {
-            if let Ok(mut stdout) = ctx_f.stdout().try_lock() {
-                stdout.push(StdoutMessage::ClearLines(num));
-                break;
-            }
+        Closure::<dyn Fn(u32)>::new(move |num| {
+            let stdout = ctx_f.stdout();
+            stdout.clear_lines(num);
         })
         .into_js_value(),
     );
@@ -135,14 +126,11 @@ fn register_stdout_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
         "hapi_stdout_write",
         Closure::<dyn Fn(*const u8)>::new(move |ptr: *const u8| loop {
             let stdout = ctx_f.stdout();
-            let Ok(mut stdout) = stdout.try_lock() else {
-                continue;
-            };
             let string = ctx_f.memory().read_str(ptr as u32);
             let Some(string) = string else {
                 return;
             };
-            stdout.push(StdoutMessage::String(string.clone()));
+            stdout.write(string).unwrap();
             break;
         })
         .into_js_value(),

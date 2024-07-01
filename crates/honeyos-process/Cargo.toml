@@ -5,10 +5,9 @@ edition = "2021"
 
 [dependencies]
 honeyos-fs = { path = "../honeyos-fs" }
+honeyos-bhai = { path = "../honeyos-bhai" }
+honeyos-atomics = { path = "../honeyos-atomics" }
 
-wasm_thread = { git = "https://github.com/adamgerhant/wasm_thread.git", rev = "b0ba16bfe310bab02f18be699926812d4489299a", features = [
-    "es_modules",
-] }
 anyhow = "1.0.82"
 arc-swap = "1.7.1"
 futures = "0.3.30"
