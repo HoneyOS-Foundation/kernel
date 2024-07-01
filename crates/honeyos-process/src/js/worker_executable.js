@@ -1,6 +1,7 @@
 import __init, * as __kernel from "BINDGEN_SHIM_URL";
 
-self.onmessage = event => {
+self.onmessage = async 
+event => {
     self.onmessage = undefined;
     const [pid, kernel, kernel_memory, memory] = event.data;
 

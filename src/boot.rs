@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use honeyos_atomics::mutex::SpinMutex;
 use honeyos_process::ProcessManager;
 use wasm_bindgen::{closure::Closure, JsCast};
 use wasm_bindgen_futures::JsFuture;
@@ -65,7 +64,7 @@ fn read_and_execute(blob: Blob) -> anyhow::Result<()> {
 
         // Summon the boot process
         let process_manager_lock = ProcessManager::get();
-        let mut process_manager = process_manager_lock.spin_lock().unwrap();
+        let mut process_manager = process_manager_lock.try_lock().unwrap();
         process_manager
             .spawn(buffer, Some("BOOT".into()), "")
             .unwrap();

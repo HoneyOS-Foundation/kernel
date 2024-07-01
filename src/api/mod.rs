@@ -4,6 +4,7 @@
 pub mod browser;
 pub mod display;
 pub mod fs;
+pub mod js;
 pub mod mem;
 pub mod network;
 pub mod process;
@@ -17,8 +18,8 @@ use wasm_bindgen::closure::Closure;
 
 use self::{
     browser::register_browser_api, display::register_display_api, fs::register_fs_api,
-    mem::register_mem_api, network::register_network_api, process::register_process_api,
-    thread::register_thread_api, time::register_time_api,
+    js::register_js_console_api, mem::register_mem_api, network::register_network_api,
+    process::register_process_api, thread::register_thread_api, time::register_time_api,
 };
 
 /// Register the api.
@@ -34,54 +35,6 @@ pub fn register_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     register_network_api(ctx.clone(), builder);
     register_fs_api(ctx.clone(), builder);
     register_thread_api(ctx.clone(), builder);
-}
-
-/// Register the js-console api
-fn register_js_console_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
-    // hapi_js_console_log_info
-    // Logs a string to the js console as info
-    let ctx_f = ctx.clone();
-    builder.register(
-        "hapi_js_console_log_info",
-        Closure::<dyn Fn(*const u8)>::new(move |ptr| {
-            let string = ctx_f.memory().read_str(ptr as u32);
-            let Some(string) = string else {
-                return;
-            };
-            log::info!("PID: {} - {}", ctx_f.pid(), string);
-        })
-        .into_js_value(),
-    );
-
-    // hapi_js_console_log_warn
-    // Logs a string to the js console as a warning
-    let ctx_f = ctx.clone();
-    builder.register(
-        "hapi_js_console_log_warn",
-        Closure::<dyn Fn(*const u8)>::new(move |ptr| {
-            let string = ctx_f.memory().read_str(ptr as u32);
-            let Some(string) = string else {
-                return;
-            };
-            log::warn!("PID: {} - {}", ctx_f.pid(), string);
-        })
-        .into_js_value(),
-    );
-
-    // hapi_js_console_log_error
-    // Logs a string to the js console as an error
-    let ctx_f = ctx.clone();
-    builder.register(
-        "hapi_js_console_log_error",
-        Closure::<dyn Fn(*const u8)>::new(move |ptr| {
-            let string = ctx_f.memory().read_str(ptr as u32);
-            let Some(string) = string else {
-                return;
-            };
-            log::error!("PID: {} - {}", ctx_f.pid(), string);
-        })
-        .into_js_value(),
-    );
 }
 
 /// Register the stdout api
@@ -124,14 +77,13 @@ fn register_stdout_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder) {
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_stdout_write",
-        Closure::<dyn Fn(*const u8)>::new(move |ptr: *const u8| loop {
+        Closure::<dyn Fn(*const u8)>::new(move |ptr: *const u8| {
             let stdout = ctx_f.stdout();
             let string = ctx_f.memory().read_str(ptr as u32);
             let Some(string) = string else {
                 return;
             };
             stdout.write(string).unwrap();
-            break;
         })
         .into_js_value(),
     );

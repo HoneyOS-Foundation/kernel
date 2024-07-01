@@ -5,7 +5,6 @@ use std::sync::{Arc, Once, RwLock};
 
 use crate::error::Error;
 use hashbrown::HashMap;
-use honeyos_atomics::rwlock::SpinRwLock;
 use request::{Request, RequestMethod, RequestMode, RequestStatus, ScheduledRequest};
 use uuid::Uuid;
 use wasm_bindgen_futures::JsFuture;
@@ -147,16 +146,20 @@ impl NetworkingManager {
 
                             if !response.ok() {
                                 let networking_manager_lock = NetworkingManager::get();
-                                let Ok(mut networking_manager) =
-                                    networking_manager_lock.spin_write()
-                                else {
+
+                                loop {
+                                    let Ok(mut networking_manager) =
+                                        networking_manager_lock.try_write()
+                                    else {
+                                        continue;
+                                    };
+                                    let Some(request) = networking_manager.requests.get_mut(&id)
+                                    else {
+                                        return;
+                                    };
+                                    request.status = RequestStatus::Fail;
                                     return;
-                                };
-                                let Some(request) = networking_manager.requests.get_mut(&id) else {
-                                    return;
-                                };
-                                request.status = RequestStatus::Fail;
-                                return;
+                                }
                             }
 
                             let blob = extract_blob(response).await.unwrap();
@@ -165,14 +168,18 @@ impl NetworkingManager {
                     }))
                     .catch(&Closure::new(move |_| {
                         let networking_manager_lock = NetworkingManager::get();
-                        let Ok(mut networking_manager) = networking_manager_lock.spin_write()
-                        else {
+
+                        loop {
+                            let Ok(mut networking_manager) = networking_manager_lock.try_write()
+                            else {
+                                continue;
+                            };
+                            let Some(request) = networking_manager.requests.get_mut(&id) else {
+                                return;
+                            };
+                            request.status = RequestStatus::Fail;
                             return;
-                        };
-                        let Some(request) = networking_manager.requests.get_mut(&id) else {
-                            return;
-                        };
-                        request.status = RequestStatus::Fail;
+                        }
                     })),
             )
             .await
@@ -205,14 +212,17 @@ fn read_and_update(id: Uuid, blob: Blob) {
         array.copy_to(&mut buffer);
 
         let networking_manager_lock = NetworkingManager::get();
-        let Ok(mut networking_manager) = networking_manager_lock.spin_write() else {
-            return;
-        };
-        let Some(request) = networking_manager.requests.get_mut(&id) else {
-            return;
-        };
-        request.status = RequestStatus::Success;
-        request.data.clone_from(&buffer);
+        loop {
+            let Ok(mut networking_manager) = networking_manager_lock.try_write() else {
+                continue;
+            };
+            let Some(request) = networking_manager.requests.get_mut(&id) else {
+                return;
+            };
+            request.status = RequestStatus::Success;
+            request.data.clone_from(&buffer);
+            break;
+        }
     }) as Box<dyn FnMut(_)>);
 
     file_reader.set_onload(Some(onload.as_ref().unchecked_ref()));

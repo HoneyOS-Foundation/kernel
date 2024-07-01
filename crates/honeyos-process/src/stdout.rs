@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use honeyos_atomics::rwlock::SpinRwLock;
 use std::sync::{Arc, Mutex, RwLock};
 
 /// A message sent to stdout
@@ -110,21 +109,35 @@ impl ProcessStdOut {
 
     /// Clear the local buffer
     pub fn clear(&self) {
-        let mut eventual_buffer = self.eventual_buffer.spin_write().unwrap();
-        eventual_buffer.clear();
+        loop {
+            let Ok(mut eventual_buffer) = self.eventual_buffer.try_write() else {
+                continue;
+            };
+            eventual_buffer.clear();
+            break;
+        }
     }
 
     /// Clear N number of lines in the processes's stdout.
     /// Will only clear up to the amount of lines.
     pub fn clear_lines(&self, num: u32) {
-        let mut process_buffer = self.process_buffer.lock().unwrap();
-        process_buffer.push(StdoutMessage::ClearLines(num));
+        loop {
+            let Ok(mut process_buffer) = self.process_buffer.try_lock() else {
+                continue;
+            };
+            process_buffer.push(StdoutMessage::ClearLines(num));
+            break;
+        }
     }
 
     /// Return the local buffer
     pub fn buffer(&self) -> String {
-        let eventual_buffer = self.eventual_buffer.spin_read().unwrap();
-        eventual_buffer.clone()
+        loop {
+            let Ok(eventual_buffer) = self.eventual_buffer.try_read() else {
+                continue;
+            };
+            return eventual_buffer.clone();
+        }
     }
 
     /// Return an arc reference to the process buffer

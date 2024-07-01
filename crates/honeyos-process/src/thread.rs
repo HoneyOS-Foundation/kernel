@@ -2,7 +2,6 @@
 use std::sync::{Arc, Mutex};
 
 use hashbrown::HashMap;
-use honeyos_atomics::mutex::SpinMutex;
 use uuid::Uuid;
 use wasm_bindgen::{closure::Closure, prelude::JsValue, JsCast};
 use web_sys::{js_sys::WebAssembly, Blob, Url, Worker, WorkerOptions, WorkerType};
@@ -55,14 +54,19 @@ impl ThreadPool {
 
         // Register callbacks
         let threads_callback = threads.clone();
-        let onmessage_callback = Closure::wrap(Box::new(move || {
-            let mut threads = threads_callback.spin_lock().unwrap();
+        let onmessage_callback = Closure::wrap(Box::new(move || loop {
+            let Ok(mut threads) = threads_callback.try_lock() else {
+                continue;
+            };
             let thread = threads.get_mut(&id).unwrap();
             thread.alive = false;
+            break;
         }) as Box<dyn FnMut()>);
         let threads_callback = threads.clone();
         let onerror_callback = Closure::wrap(Box::new(move || loop {
-            let mut threads = threads_callback.spin_lock().unwrap();
+            let Ok(mut threads) = threads_callback.try_lock() else {
+                continue;
+            };
             let thread = threads.get_mut(&id).unwrap();
             thread.alive = false;
             break;
@@ -74,6 +78,7 @@ impl ThreadPool {
         // Wait till the lock is free
         loop {
             let Ok(mut threads) = threads.try_lock() else {
+                log::info!("Waiting for thread lock");
                 continue;
             };
             threads.insert(
@@ -97,6 +102,7 @@ impl ThreadPool {
     pub fn alive(&self, id: u32) -> bool {
         loop {
             let Ok(threads) = self.threads.try_lock() else {
+                log::info!("Wating for thread lock");
                 continue;
             };
             let thread = threads.get(&id).unwrap();
@@ -108,6 +114,7 @@ impl ThreadPool {
     pub fn kill(&mut self, id: u32) -> Result<(), ThreadError> {
         loop {
             let Ok(threads) = self.threads.try_lock() else {
+                log::info!("Wating for thread lock");
                 continue;
             };
             let thread = threads.get(&id).unwrap();
@@ -121,6 +128,7 @@ impl ThreadPool {
     pub fn kill_all(&mut self) {
         loop {
             let Ok(mut threads) = self.threads.try_lock() else {
+                log::info!("Wating for thread lock");
                 continue;
             };
             for (_, thread) in threads.iter_mut() {
@@ -168,9 +176,11 @@ fn spawn_worker(
 fn generate_worker_script() -> String {
     static CACHED_SCRIPT: Mutex<Option<String>> = Mutex::new(None);
 
-    let cached = CACHED_SCRIPT.spin_lock().unwrap();
-    if let Some(url) = cached.as_ref() {
-        return url.clone();
+    // Cache the url
+    if let Ok(mut cached) = CACHED_SCRIPT.try_lock() {
+        if let Some(cached) = cached.as_mut() {
+            return cached.clone();
+        }
     }
 
     // Aquire the script path by generating a stack trace and parsing the path from it.
@@ -194,8 +204,11 @@ fn generate_worker_script() -> String {
     .unwrap();
 
     // Cache the url
-    let mut cached = CACHED_SCRIPT.spin_lock().unwrap();
-    *cached = Some(url.clone());
+    if let Ok(mut cached) = CACHED_SCRIPT.try_lock() {
+        if let Some(cached) = cached.as_mut() {
+            *cached = url.clone();
+        }
+    }
 
     url
 }

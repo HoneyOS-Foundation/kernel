@@ -1,14 +1,12 @@
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
 use hashbrown::HashMap;
+use honeyos_atomics::{mutex::SpinMutex, rwlock::SpinRwLock};
 use uuid::Uuid;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 use web_sys::js_sys::{Reflect, WebAssembly, JSON};
 
-use crate::{
-    memory::Memory,
-    stdout::{ProcessStdOut, StdoutMessage},
-};
+use crate::{memory::Memory, stdout::ProcessStdOut};
 
 /// A function responsible for building the api for wasm processes
 pub type ApiBuilderFn = fn(Arc<ProcessCtx>, &mut ApiModuleBuilder);
@@ -23,6 +21,12 @@ pub struct ProcessCtx {
     cwd: Arc<RwLock<String>>,
     module: Arc<Vec<u8>>,
     api_builder: ApiBuilderFn,
+}
+
+/// The builder for an api module
+#[derive(Debug, Clone)]
+pub struct ApiModuleBuilder {
+    values: HashMap<String, JsValue>,
 }
 
 impl ProcessCtx {
@@ -58,12 +62,13 @@ impl ProcessCtx {
 
     /// Get the memory of the wasm module
     pub fn memory<'a>(&'a self) -> MutexGuard<'a, Memory> {
-        loop {
-            let Ok(memory) = self.memory.try_lock() else {
-                continue;
-            };
-            return memory;
-        }
+        let memory = self.memory.lock().unwrap(); // Spin locking blocks the entire process. Figure out a way to not block the entire process
+        memory
+    }
+
+    /// Get the memory of the wasm module without spinning
+    pub fn memory_nospin<'a>(&'a self) -> MutexGuard<'a, Memory> {
+        self.memory.lock().unwrap()
     }
 
     /// Get the stdout messenger of the wasm module
@@ -84,33 +89,18 @@ impl ProcessCtx {
     /// Set the working directory
     pub fn set_cwd(&self, wd: &str) {
         let wd = honeyos_fs::util::normalize_path(wd);
-        loop {
-            let Ok(mut writer) = self.cwd.try_write() else {
-                continue;
-            };
-            *writer = wd.clone();
-            return;
-        }
+        let mut cwd = self.cwd.spin_write().unwrap();
+        *cwd = wd;
     }
 
     /// Create a new copy for this worker
     pub fn new_worker(&self, memory_inner: WebAssembly::Memory) -> Self {
-        loop {
-            let Ok(memory) = self.memory.try_lock() else {
-                continue;
-            };
-            let new_memory = Arc::new(Mutex::new(memory.new_inner(memory_inner)));
-            let mut clone = self.clone();
-            clone.memory = new_memory;
-            return clone;
-        }
+        let memory = self.memory.spin_lock().unwrap();
+        let new_memory = Arc::new(Mutex::new(memory.new_inner(memory_inner)));
+        let mut clone = self.clone();
+        clone.memory = new_memory;
+        clone
     }
-}
-
-/// The builder for an api module
-#[derive(Debug, Clone)]
-pub struct ApiModuleBuilder {
-    values: HashMap<String, JsValue>,
 }
 
 impl ApiModuleBuilder {

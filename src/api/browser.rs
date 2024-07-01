@@ -67,5 +67,5 @@ pub fn register_browser_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     // builder.register(
     //     "hapi_browser_request_upload",
     //     Closure::<dyn Fn() -> *const u8>::new(move || 0 as *const u8).into_js_value(),
-    // );[
+    // );
 }

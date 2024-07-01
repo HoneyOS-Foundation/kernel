@@ -43,7 +43,6 @@ impl TextMode {
         for _ in 0..(self.width * self.height) {
             self.buffer.push(' ');
         }
-        log::info!("{} : {}", self.width, self.height);
     }
 
     /// Write a character to the display

@@ -120,10 +120,6 @@ impl Memory {
     pub fn write(&mut self, ptr: u32, data: &[u8]) {
         let bytes = Uint8Array::new(&self.inner.buffer());
         let array = Uint8Array::from(data);
-        if ptr + data.len() as u32 > bytes.byte_length() {
-            let difference = ptr + data.len() as u32 - bytes.byte_length();
-            self.inner.grow(difference);
-        }
         bytes.set(&array, ptr);
     }
 

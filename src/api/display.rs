@@ -16,9 +16,7 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
         "hapi_display_assume_control",
         Closure::<dyn Fn() -> i32>::new(move || {
             let display_lock = Display::get();
-            let Ok(mut display) = display_lock.spin_write() else {
-                return -1;
-            };
+            let mut display = display_lock.spin_write().unwrap();
             if let Err(Error::DisplayOccupied) = display.assume_control(ctx_f.pid()) {
                 return -1;
             }
@@ -33,9 +31,7 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
         "hapi_display_loosen_control",
         Closure::<dyn Fn() -> i32>::new(move || {
             let display_lock = Display::get();
-            let Ok(mut display) = display_lock.spin_write() else {
-                return -1;
-            };
+            let mut display = display_lock.spin_write().unwrap();
             if !display.has_control(ctx_f.pid()) {
                 return -1;
             }
@@ -53,9 +49,7 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
         "hapi_display_override_control",
         Closure::<dyn Fn() -> i32>::new(move || {
             let display_lock = Display::get();
-            let Ok(mut display) = display_lock.spin_write() else {
-                return -1;
-            };
+            let mut display = display_lock.spin_write().unwrap();
             display.override_control(ctx_f.pid());
             0
         })
@@ -68,10 +62,7 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
         "hapi_display_release_control",
         Closure::<dyn Fn() -> i32>::new(move || {
             let display_lock = Display::get();
-            let Ok(mut display) = display_lock.spin_write() else {
-                return -1;
-            };
-
+            let mut display = display_lock.spin_write().unwrap();
             if !display.has_control(ctx_f.pid()) {
                 return -1;
             }
@@ -86,9 +77,7 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
         "hapi_display_displace_control",
         Closure::<dyn Fn() -> i32>::new(move || {
             let display_lock = Display::get();
-            let Ok(mut display) = display_lock.spin_write() else {
-                return -1;
-            };
+            let mut display = display_lock.spin_write().unwrap();
             display.release_control();
             0
         })
@@ -101,9 +90,7 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
         "hapi_display_push_stdout",
         Closure::<dyn Fn() -> i32>::new(move || {
             let display_lock = Display::get();
-            let Ok(mut display) = display_lock.spin_write() else {
-                return -1;
-            };
+            let mut display = display_lock.spin_write().unwrap();
             if !display.has_control(ctx_f.pid()) {
                 return -1;
             }
@@ -123,9 +110,11 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
             };
 
             // Send stdout to the display
-            let text_mode = display.text_mode_mut();
-            text_mode.clear();
-            text_mode.append_str(&stdout_str);
+            {
+                let text_mode = display.text_mode_mut();
+                text_mode.clear();
+                text_mode.append_str(&stdout_str);
+            }
 
             display.notify_update();
 
@@ -144,15 +133,16 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
                 return -2;
             };
             let display_lock = Display::get();
-            let Ok(mut display) = display_lock.spin_write() else {
-                return -1;
-            };
+            let mut display = display_lock.spin_write().unwrap();
             if !display.has_control(ctx_f.pid()) {
                 return -1;
             }
-            let text_mode = display.text_mode_mut();
-            text_mode.clear();
-            text_mode.append_str(string);
+
+            {
+                let text_mode = display.text_mode_mut();
+                text_mode.clear();
+                text_mode.append_str(string);
+            }
 
             display.notify_update();
 
@@ -165,11 +155,9 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_get_key_buffer",
-        Closure::<dyn Fn() -> i32>::new(move || loop {
+        Closure::<dyn Fn() -> i32>::new(move || {
             let display_lock = Display::get();
-            let Ok(display) = display_lock.spin_read() else {
-                return -1;
-            };
+            let display = display_lock.spin_read().unwrap();
             if !display.has_control(ctx_f.pid()) {
                 return -1;
             }
@@ -185,11 +173,9 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_get_key_shift",
-        Closure::<dyn Fn() -> i32>::new(move || loop {
+        Closure::<dyn Fn() -> i32>::new(move || {
             let display_lock = Display::get();
-            let Ok(display) = display_lock.spin_read() else {
-                return -1;
-            };
+            let display = display_lock.spin_read().unwrap();
             if !display.has_control(ctx_f.pid()) {
                 return -1;
             }
@@ -202,11 +188,9 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_get_key_ctrl",
-        Closure::<dyn Fn() -> i32>::new(move || loop {
+        Closure::<dyn Fn() -> i32>::new(move || {
             let display_lock = Display::get();
-            let Ok(display) = display_lock.spin_read() else {
-                return -1;
-            };
+            let display = display_lock.spin_read().unwrap();
             if !display.has_control(ctx_f.pid()) {
                 return -1;
             }
@@ -219,11 +203,9 @@ pub fn register_display_api(ctx: Arc<ProcessCtx>, builder: &mut ApiModuleBuilder
     let ctx_f = ctx.clone();
     builder.register(
         "hapi_display_clear_key",
-        Closure::<dyn Fn() -> i32>::new(move || loop {
+        Closure::<dyn Fn() -> i32>::new(move || {
             let display_lock = Display::get();
-            let Ok(mut display) = display_lock.spin_write() else {
-                return -1;
-            };
+            let mut display = display_lock.spin_write().unwrap();
             if !display.has_control(ctx_f.pid()) {
                 return -1;
             }

@@ -1,6 +1,5 @@
 use anyhow::anyhow;
 use honeyos_atomics::mutex::SpinMutex;
-use honeyos_bhai::{context::ScopeBuilderFn, Scope};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex, RwLock,
@@ -91,7 +90,7 @@ impl Process {
         // Send the kernel memory
         msg.push(&wasm_bindgen::memory());
         // Send the process memory
-        msg.push(self.ctx().memory().inner());
+        msg.push(self.ctx().memory_nospin().inner());
 
         worker
             .post_message(&msg)
@@ -124,7 +123,9 @@ impl Process {
 
     /// Spawn a thread and return it's id
     pub fn spawn_thread(&mut self, f_ptr: u32) -> anyhow::Result<u32> {
-        let id = self.thread_pool.spawn(f_ptr, self.ctx().memory().inner())?;
+        let id = self
+            .thread_pool
+            .spawn(f_ptr, self.ctx().memory_nospin().inner())?;
         Ok(id)
     }
 
@@ -388,9 +389,11 @@ pub async fn init_binary(bin: &[u8], imports: JsValue) -> WebAssembly::Instance 
 fn get_worker_script() -> String {
     static CACHED_SCRIPT: Mutex<Option<String>> = Mutex::new(None);
 
-    let cached = CACHED_SCRIPT.spin_lock().unwrap();
-    if let Some(url) = cached.as_ref() {
-        return url.clone();
+    // Cache the url
+    if let Ok(mut cached) = CACHED_SCRIPT.try_lock() {
+        if let Some(cached) = cached.as_mut() {
+            return cached.clone();
+        }
     }
 
     // Aquire the script path by generating a stack trace and parsing the path from it.
@@ -414,8 +417,11 @@ fn get_worker_script() -> String {
     .unwrap();
 
     // Cache the url
-    let mut cached = CACHED_SCRIPT.spin_lock().unwrap();
-    *cached = Some(url.clone());
+    if let Ok(mut cached) = CACHED_SCRIPT.try_lock() {
+        if let Some(cached) = cached.as_mut() {
+            *cached = url.clone();
+        }
+    }
 
     url
 }

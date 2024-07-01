@@ -21,9 +21,14 @@ impl<T> SpinRwLock for RwLock<T> {
     type Inner = T;
 
     fn spin_read(&self) -> TryLockResult<RwLockReadGuard<Self::Inner>> {
+        // log::info!("Spin Lock started for: {}", std::any::type_name::<T>());
         loop {
+            // std::thread::sleep(std::time::Duration::from_millis(50)); // Will panic on main thread
             match self.try_read() {
-                Ok(guard) => return Ok(guard),
+                Ok(guard) => {
+                    // log::info!("Spin Lock stopped for: {}", std::any::type_name::<T>());
+                    return Ok(guard);
+                }
                 Err(error) => match error {
                     TryLockError::WouldBlock => continue,
                     _ => return Err(error),
@@ -33,9 +38,14 @@ impl<T> SpinRwLock for RwLock<T> {
     }
 
     fn spin_write(&self) -> TryLockResult<RwLockWriteGuard<Self::Inner>> {
+        // log::info!("Spin Lock started for: {}", std::any::type_name::<T>());
         loop {
+            // std::thread::sleep(std::time::Duration::from_millis(50)); // Will panic on main thread
             match self.try_write() {
-                Ok(guard) => return Ok(guard),
+                Ok(guard) => {
+                    // log::info!("Spin Lock stopped for: {}", std::any::type_name::<T>());
+                    return Ok(guard);
+                }
                 Err(error) => match error {
                     TryLockError::WouldBlock => continue,
                     _ => return Err(error),

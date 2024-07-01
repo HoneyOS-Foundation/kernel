@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 honeyos-fs = { path = "../honeyos-fs" }
-honeyos-bhai = { path = "../honeyos-bhai" }
 honeyos-atomics = { path = "../honeyos-atomics" }
 
 anyhow = "1.0.82"
@@ -29,6 +28,9 @@ web-sys = { version = "0.3.69", features = [
     "HtmlTextAreaElement",
     "Node",
     "Window",
+    "Worker",
+    "WorkerOptions",
+    "WorkerType",
     "Navigator",
     "Location",
     "Clipboard",

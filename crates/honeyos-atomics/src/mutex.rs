@@ -17,8 +17,13 @@ impl<T> SpinMutex for std::sync::Mutex<T> {
 
     fn spin_lock(&self) -> TryLockResult<MutexGuard<Self::Inner>> {
         loop {
+            // log::info!("Spin Lock started for: {}", std::any::type_name::<T>());
+            std::thread::sleep(std::time::Duration::from_millis(50)); // Will panic on main thread
             match self.try_lock() {
-                Ok(guard) => return Ok(guard),
+                Ok(guard) => {
+                    // log::info!("Spin Lock stopped for: {}", std::any::type_name::<T>());
+                    return Ok(guard);
+                }
                 Err(error) => match error {
                     std::sync::TryLockError::WouldBlock => continue,
                     _ => return Err(error),

@@ -183,7 +183,7 @@ fn register_callbacks(window: &Window) {
     window
         .add_event_listener_with_callback(
             "keydown",
-            Closure::<dyn Fn(KeyboardEvent)>::new(|event: KeyboardEvent| loop {
+            Closure::<dyn Fn(KeyboardEvent)>::new(|event: KeyboardEvent| {
                 event.prevent_default();
 
                 let display = Display::get();
@@ -195,7 +195,6 @@ fn register_callbacks(window: &Window) {
                     shift: event.shift_key(),
                     ctrl: event.ctrl_key(),
                 };
-                break;
             })
             .into_js_value()
             .unchecked_ref(),
@@ -206,7 +205,7 @@ fn register_callbacks(window: &Window) {
     window
         .add_event_listener_with_callback(
             "resize",
-            Closure::<dyn Fn(Event)>::new(|_: Event| loop {
+            Closure::<dyn Fn(Event)>::new(|_: Event| {
                 let display = Display::get();
                 let Ok(mut display) = display.try_write() else {
                     return;
@@ -215,7 +214,6 @@ fn register_callbacks(window: &Window) {
                 let (width, height) = (root.client_width(), root.client_height());
 
                 display.text_mode.resize(width as u32, height as u32);
-                break;
             })
             .into_js_value()
             .unchecked_ref(),

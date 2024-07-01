@@ -12,7 +12,7 @@ use wasm_bindgen::prelude::{wasm_bindgen, Closure, JsCast};
 use web_sys::Window;
 
 /// Some delay to prevent the os from using too much cpu
-const EXECUTION_TIMEOUT: i32 = 50;
+const EXECUTION_TIMEOUT: i32 = 25;
 
 // To prevent GC invocations every cycle, the callbacks is stored in a thread_local static variable
 thread_local! {
@@ -100,12 +100,14 @@ fn update_network_manager() {
 /// Render the display server
 fn render_display_server() {
     // Render the display server
-    let display_lock = Display::get();
-    if let Ok(mut display_server) = display_lock.write() {
+    let display_lock: std::sync::Arc<std::sync::RwLock<Display>> = Display::get();
+    loop {
+        let Ok(mut display_server) = display_lock.try_write() else {
+            continue;
+        };
         display_server.render();
-    } else {
-        log::info!("Missed display frame");
-    };
+        break;
+    }
 }
 
 /// The panic hook for the WASM module

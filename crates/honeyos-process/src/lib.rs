@@ -5,7 +5,6 @@ use hashbrown::{
     hash_map::{Values, ValuesMut},
     HashMap,
 };
-use honeyos_bhai::context::ScopeBuilderFn;
 use process::Process;
 use thread::ThreadRequest;
 use uuid::Uuid;

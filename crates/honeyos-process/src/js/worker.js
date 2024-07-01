@@ -1,6 +1,6 @@
 import __init, * as __kernel from "BINDGEN_SHIM_URL";
 
-self.onmessage = event => {
+self.onmessage = async event => {
     self.onmessage = undefined; // Prevent eval from reading onmessage
     const [pid, kernel, kernel_memory, memory, f_ptr] = event.data;
 
